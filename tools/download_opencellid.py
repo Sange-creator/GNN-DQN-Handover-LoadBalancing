@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from handover_gnn_dqn.topology import REGIONS, latlon_to_xy
 
 
@@ -86,7 +86,7 @@ def main():
     parser.add_argument("--input", type=Path, help="Path to already-downloaded CSV")
     args = parser.parse_args()
 
-    data_dir = Path("data/opencellid")
+    data_dir = Path("data/raw/opencellid")
     data_dir.mkdir(parents=True, exist_ok=True)
 
     raw_path = data_dir / "nepal_lte_raw.csv"

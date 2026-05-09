@@ -1,80 +1,104 @@
-# GNN-DQN: Graph Neural Network-based Deep Q-Network for Intelligent Handover Optimization in LTE/5G Networks
+# GNN-DQN Handover Optimization
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
+Research code for topology-invariant, per-UE handover optimization in LTE/5G-style
+networks. The main publishable path is **UE-only**: RSRP, RSRQ-derived load proxy,
+mobility, serving-cell state, and handover history. A separate **O-RAN/E2** profile
+adds true PRB/counter features when network-side telemetry is available.
 
-A production-feasible handover controller using graph-aware Deep Reinforcement Learning to optimize user-equipment (UE) handover decisions in mobile networks. This project implements a novel **GNN-DQN** architecture that generalizes across different network topologies without retraining.
+The deployable framing is **SON-GNN-DQN**: the learned GNN-DQN policy produces
+per-UE target preferences, then a safety-bounded SON controller aggregates those
+preferences into standard handover parameter updates such as CIO/TTT. Direct
+GNN-DQN remains an evaluation baseline.
 
-## 🚀 Key Features
+## Current Status
 
-- **Graph-Aware Intelligence:** Uses Graph Convolutional Networks (GCN) to capture spatial relationships between cells.
-- **Topology-Invariant Generalization:** The same model weights work on any cell layout (e.g., from Pokhara to Kathmandu) without retraining.
-- **UE-Observable Only:** Operates using only measurements available to the UE (RSRP, RSRQ as load proxy), ensuring deployment realism.
-- **Dueling Double DQN (D3QN):** High-performance reinforcement learning with dueling heads and target networks.
-- **Multi-Scenario Support:** Evaluated on Dense Urban, Highway, Suburban, Rural, and Real-world (OpenCellID) topologies.
-- **Standard Baselines:** Includes comparison against 3GPP A3-TTT, Strongest RSRP, Load-aware heuristics, and Flat DQN.
+This repo has been refactored into a training-ready structure. Results archived under
+`results/archive_prefix/pre_refactor_2026-05-09/` are diagnostic only and should not be
+cited as final results.
 
-## 🛠 Project Architecture
+## Project Structure
 
-The GNN-DQN agent processes cell features through a 3-layer Graph Convolutional Network:
-1. **Input:** 12 features per cell node (RSRP, RSRQ trends, serving indicator, etc.).
-2. **Feature Extraction:** 3x GCNConv layers with ReLU activation and Dropout.
-3. **Decision Making:** Dueling Q-Head (Value and Advantage streams) to select the optimal target cell.
-
-## 📦 Installation
-
-```bash
-git clone https://github.com/YOUR_USERNAME/gnn-dqn-handover-loadbalancing.git
-cd gnn-dqn-handover-loadbalancing
-pip install -r requirements.txt
+```text
+configs/experiments/      JSON configs for smoke, UE-only, Pokhara, and O-RAN runs
+data/raw/                 OpenCellID, ns-3, synthetic, and drive-test inputs
+data/processed/           Cleaned/generated datasets (ignored by git)
+docs/                     Project notes, guides, and paper material
+scripts/                  Config-driven train/evaluate/data/figure entrypoints
+src/handover_gnn_dqn/     Reusable package code
+tests/                    Unit/integration/regression acceptance tests
+results/archive_prefix/   Archived pre-fix diagnostic outputs
+results/runs/             New generated runs (ignored by git)
 ```
 
-## 🏃 Usage
+## Feature Profiles
 
-### Quick Start (Smoke Test)
+- `ue_only`: drive-test compatible. Uses UE-observable radio measurements and
+  `load_proxy_rsrq`. It does not require PRB utilization.
+- `oran_e2`: future O-RAN/xApp-compatible profile. Adds true `prb_utilization`,
+  `prb_available`, connected UE count, and cell throughput when network-side telemetry
+  is available.
+
+Drive-test data without PRB is valid. Missing PRB is represented explicitly with
+`prb_available = 0`; estimated RSRQ load is never treated as true PRB utilization.
+
+## SON Deployment Mode
+
+Evaluation now includes `son_gnn_dqn`, a SON-compatible tuned-A3 policy. It:
+
+- samples GNN-DQN per-UE target preferences periodically,
+- aggregates preferences over serving-target cell pairs,
+- applies bounded CIO changes within operator-style limits,
+- increases TTT conservatively when ping-pong becomes high,
+- reports SON KPIs such as update count, CIO magnitude, and rollback count.
+
+This is the recommended defense framing for current non-O-RAN deployment.
+
+## Commands
+
 ```bash
-python3 run_experiment.py --train-episodes 4 --steps 35 --test-episodes 3
+# Acceptance smoke: UE-only
+python3 scripts/train.py --config configs/experiments/smoke_ue.json
+
+# Acceptance smoke: O-RAN/E2 feature profile
+python3 scripts/train.py --config configs/experiments/smoke_oran.json
+
+# Main publishable training path
+python3 scripts/train.py --config configs/experiments/multiscenario_ue.json
+
+# Evaluate a saved checkpoint
+python3 scripts/evaluate.py \
+  --checkpoint results/runs/multiscenario_ue/checkpoints/gnn_dqn.pt \
+  --out-dir results/runs/multiscenario_ue/eval_20seed \
+  --seeds 20
 ```
 
-### Full Multi-Scenario Training
-Trains on a mix of urban, highway, and rural scenarios to learn topology-invariant policies.
+Legacy wrappers remain:
+
 ```bash
-python3 run_full_training.py
+python3 run_experiment.py   # smoke UE-only
+python3 run_overnight.py    # Pokhara UE-only config
+python3 run_full_training.py # multi-scenario UE-only config
 ```
 
-### Real-World Topology Training (Pokhara)
+## Pre-Training Gate
+
+Before a long run, verify:
+
 ```bash
-python3 run_overnight.py
+PYTHONPATH=src python3 -m pytest -q
 ```
 
-### ns-3 Data Generation
-Generate LTE handover data using the integrated ns-3.40 bridge.
+Then run both feature-profile smoke tests:
+
 ```bash
-python3 tools/run_ns3_dataset.py --sim-time 30 --sample-period 1 --run 1
+python3 scripts/train.py --config configs/experiments/smoke_ue.json
+python3 scripts/train.py --config configs/experiments/smoke_oran.json
 ```
 
-## 📊 Performance Summary
+Long runs can be resumed from generated checkpoints:
 
-| Method | Avg UE Mbps | P5 UE Mbps | Load Std Dev | Handover Rate |
-| :--- | :---: | :---: | :---: | :---: |
-| **GNN-DQN (Ours)** | **1.17** | **0.06** | **4.65** | **45.2** |
-| Strongest RSRP | 1.00 | 0.06 | 5.74 | 38.5 |
-| A3 TTT | 0.97 | 0.06 | 5.48 | 5.6 |
-| Load-Aware Heuristic | 1.18 | 0.07 | 4.65 | 91.2 |
-
-*Note: Results vary by scenario. Multi-scenario training demonstrates superior generalization on unseen topologies.*
-
-## 📂 Project Structure
-
-- `handover_gnn_dqn/`: Core logic (GNN model, simulator, policies).
-- `data/`: OpenCellID positions, ns-3 traces, and synthetic datasets.
-- `results/`: Training logs, history, and model checkpoints (.pt).
-- `tools/`: Utility scripts for data downloading and ns-3 integration.
-- `run_*.py`: Entry points for training and experiments.
-
-## 📝 Reference
-
-This project is part of a research effort targeted at journal publication (IEEE TVT / Computer Networks). 
-
----
-© 2026 GNN-DQN Handover Optimization Team
+```bash
+python3 scripts/train.py \
+  --config configs/experiments/multiscenario_ue.json \
+  --resume results/runs/multiscenario_ue/checkpoints/resume/resume_ep0025.pt
+```

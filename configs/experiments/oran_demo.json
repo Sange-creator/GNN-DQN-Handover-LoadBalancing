@@ -1,0 +1,25 @@
+{
+  "run_name": "oran_demo",
+  "out_dir": "results/runs/oran_demo",
+  "feature_mode": "oran_e2",
+  "prb_available": true,
+  "seed": 42,
+  "episodes": 80,
+  "steps_per_episode": 80,
+  "eval_seeds": 5,
+  "checkpoint_every_episodes": 20,
+  "train_scenarios": ["dense_urban", "suburban", "overloaded_event"],
+  "test_scenarios": ["kathmandu_real"],
+  "dqn": {
+    "hidden_dim": 128,
+    "gamma": 0.97,
+    "learning_rate": 0.0001,
+    "batch_size": 128,
+    "replay_capacity": 120000,
+    "train_every": 4,
+    "target_update_every": 1000,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.05,
+    "epsilon_decay_episodes": 60
+  }
+}

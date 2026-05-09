@@ -1,0 +1,37 @@
+{
+  "run_name": "diagnostic_ue",
+  "out_dir": "results/runs/diagnostic_ue",
+  "feature_mode": "ue_only",
+  "prb_available": false,
+  "seed": 42,
+  "episodes": 60,
+  "steps_per_episode": 60,
+  "eval_seeds": 5,
+  "checkpoint_every_episodes": 15,
+  "train_scenarios": [
+    "dense_urban",
+    "highway",
+    "suburban",
+    "sparse_rural",
+    "overloaded_event",
+    "real_pokhara",
+    "pokhara_dense_peakhour"
+  ],
+  "test_scenarios": [
+    "kathmandu_real",
+    "unknown_hex_grid",
+    "coverage_hole"
+  ],
+  "dqn": {
+    "hidden_dim": 96,
+    "gamma": 0.97,
+    "learning_rate": 0.0001,
+    "batch_size": 96,
+    "replay_capacity": 120000,
+    "train_every": 4,
+    "target_update_every": 800,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.05,
+    "epsilon_decay_episodes": 80
+  }
+}

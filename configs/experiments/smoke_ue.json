@@ -1,0 +1,24 @@
+{
+  "run_name": "smoke_ue",
+  "out_dir": "results/runs/smoke_ue",
+  "feature_mode": "ue_only",
+  "prb_available": false,
+  "seed": 42,
+  "episodes": 4,
+  "steps_per_episode": 8,
+  "eval_seeds": 2,
+  "train_scenarios": ["dense_urban", "highway"],
+  "test_scenarios": ["kathmandu_real"],
+  "dqn": {
+    "hidden_dim": 64,
+    "gamma": 0.97,
+    "learning_rate": 0.0001,
+    "batch_size": 32,
+    "replay_capacity": 20000,
+    "train_every": 4,
+    "target_update_every": 500,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.1,
+    "epsilon_decay_episodes": 4
+  }
+}

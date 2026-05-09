@@ -82,7 +82,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-ues", type=int, default=25)
     parser.add_argument("--run", type=int, default=1)
     parser.add_argument("--skip-build", action="store_true")
-    parser.add_argument("--out-dir", type=Path, default=PROJECT_ROOT / "data" / "ns3")
+    parser.add_argument("--out-dir", type=Path, default=PROJECT_ROOT / "data" / "raw" / "ns3")
     return parser.parse_args()
 
 
@@ -124,4 +124,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
