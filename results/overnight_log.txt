@@ -1,0 +1,89 @@
+============================================================
+  GNN-DQN TRAINING
+  Real Pokhara Topology (15 cells, 90 UEs)
+============================================================
+  Cells: 15
+  UEs: 90
+  Area: 10124 m
+  Training: 100 episodes × 80 steps
+  Evaluation: 10 seeds
+  Estimated time: ~4.5 hours
+============================================================
+
+Phase 1: Training GNN-DQN...
+  Device: cpu
+[0005/100] eps=0.953 avg_thr=0.911 load_std=5.169 loss=2.6011 reward=-68879.2
+[0010/100] eps=0.893 avg_thr=0.738 load_std=6.676 loss=2.6336 reward=-72363.6
+[0015/100] eps=0.834 avg_thr=0.671 load_std=6.518 loss=2.6821 reward=-83541.0
+[0020/100] eps=0.774 avg_thr=0.729 load_std=7.848 loss=2.5488 reward=-85812.8
+[0025/100] eps=0.715 avg_thr=0.912 load_std=5.819 loss=2.4902 reward=-68067.2
+[0030/100] eps=0.656 avg_thr=0.762 load_std=7.626 loss=2.2519 reward=-80512.2
+[0035/100] eps=0.596 avg_thr=0.822 load_std=6.079 loss=2.0630 reward=-71827.7
+[0040/100] eps=0.537 avg_thr=0.602 load_std=7.089 loss=1.8259 reward=-79877.5
+[0045/100] eps=0.478 avg_thr=0.849 load_std=6.113 loss=1.7149 reward=-72313.3
+[0050/100] eps=0.418 avg_thr=0.665 load_std=4.478 loss=1.5909 reward=-67778.6
+[0055/100] eps=0.359 avg_thr=0.756 load_std=6.911 loss=1.6248 reward=-77007.6
+[0060/100] eps=0.299 avg_thr=0.767 load_std=5.924 loss=1.5727 reward=-77998.1
+[0065/100] eps=0.240 avg_thr=0.516 load_std=4.456 loss=1.6686 reward=-63373.7
+[0070/100] eps=0.181 avg_thr=0.860 load_std=4.917 loss=1.6920 reward=-64073.8
+[0075/100] eps=0.121 avg_thr=0.774 load_std=5.045 loss=2.0100 reward=-59768.7
+[0080/100] eps=0.062 avg_thr=0.708 load_std=7.194 loss=1.7289 reward=-70016.5
+[0085/100] eps=0.050 avg_thr=0.842 load_std=4.438 loss=1.4112 reward=-62770.8
+[0090/100] eps=0.050 avg_thr=0.959 load_std=5.191 loss=1.4893 reward=-65669.5
+[0095/100] eps=0.050 avg_thr=0.737 load_std=6.757 loss=1.6107 reward=-73426.1
+[0100/100] eps=0.050 avg_thr=0.709 load_std=6.543 loss=1.9739 reward=-71756.5
+
+GNN-DQN training done in 4.5 hours
+Parameters: 30,658
+Model saved to results/overnight/gnn_dqn_pokhara.pt
+
+
+Phase 2: Training Flat-DQN (baseline)...
+[flat-DQN 0005/100] eps=0.953 avg_thr=0.885 load_std=5.199 loss=6.9511
+[flat-DQN 0010/100] eps=0.893 avg_thr=0.838 load_std=5.723 loss=4.3436
+[flat-DQN 0015/100] eps=0.834 avg_thr=0.955 load_std=6.837 loss=2.7497
+[flat-DQN 0020/100] eps=0.774 avg_thr=0.722 load_std=6.323 loss=2.4265
+[flat-DQN 0025/100] eps=0.715 avg_thr=0.598 load_std=4.675 loss=1.9316
+[flat-DQN 0030/100] eps=0.656 avg_thr=0.776 load_std=4.783 loss=1.6577
+[flat-DQN 0035/100] eps=0.596 avg_thr=0.834 load_std=5.481 loss=1.5546
+[flat-DQN 0040/100] eps=0.537 avg_thr=0.518 load_std=5.386 loss=1.4263
+[flat-DQN 0045/100] eps=0.478 avg_thr=0.713 load_std=4.265 loss=1.5274
+[flat-DQN 0050/100] eps=0.418 avg_thr=0.818 load_std=4.826 loss=1.3688
+[flat-DQN 0055/100] eps=0.359 avg_thr=0.810 load_std=5.609 loss=1.4018
+[flat-DQN 0060/100] eps=0.299 avg_thr=0.835 load_std=6.209 loss=1.4397
+[flat-DQN 0065/100] eps=0.240 avg_thr=0.674 load_std=4.093 loss=1.5782
+[flat-DQN 0070/100] eps=0.181 avg_thr=0.638 load_std=4.558 loss=1.7901
+[flat-DQN 0075/100] eps=0.121 avg_thr=0.524 load_std=7.724 loss=1.7599
+[flat-DQN 0080/100] eps=0.062 avg_thr=0.411 load_std=7.464 loss=2.0515
+[flat-DQN 0085/100] eps=0.050 avg_thr=0.314 load_std=9.613 loss=2.7132
+[flat-DQN 0090/100] eps=0.050 avg_thr=0.484 load_std=7.820 loss=2.3913
+[flat-DQN 0095/100] eps=0.050 avg_thr=0.570 load_std=6.454 loss=2.5643
+[flat-DQN 0100/100] eps=0.050 avg_thr=0.341 load_std=9.715 loss=2.4697
+
+Flat-DQN training done in 2.2 hours
+
+
+Phase 3: Evaluating all 6 methods (10 seeds)...
+
+        Method | Avg Mbps | P5 Mbps | Total Mbps | Load Std |  Jain | Outage | Overload | HO/1000 | Ping-pong
+---------------+----------+---------+------------+----------+-------+--------+----------+---------+----------
+    load_aware |    1.179 |   0.067 |    106.073 |    4.648 | 0.594 |  0.295 |    0.928 |  91.167 |     0.529
+strongest_rsrp |    0.999 |   0.059 |     89.898 |    5.738 | 0.473 |  0.281 |    0.684 |  38.514 |     0.260
+        a3_ttt |    0.965 |   0.061 |     86.819 |    5.475 | 0.507 |  0.297 |    0.712 |   5.583 |     0.000
+   no_handover |    0.921 |   0.062 |     82.898 |    5.082 | 0.564 |  0.340 |    0.784 |   0.000 |     0.000
+       gnn_dqn |    0.898 |   0.053 |     80.809 |    5.985 | 0.538 |  0.332 |    0.835 |  45.236 |     0.352
+      flat_dqn |    0.379 |   0.027 |     34.082 |   10.061 | 0.376 |  0.499 |    0.746 |  11.222 |     0.000
+
+=== GNN-DQN vs Best Traditional (strongest_rsrp) ===
+  Avg throughput:  -10.1%
+  P5 throughput:   -9.1%
+  Load balance:    -4.3% lower std
+
+=== GNN-DQN vs Flat-DQN (GNN value proof) ===
+  Throughput:      +137.1%
+  Load balance:    +40.5% lower std
+
+============================================================
+  TOTAL TIME: 7.2 hours
+  Results: results/overnight/
+============================================================

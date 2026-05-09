@@ -1,0 +1,2 @@
+rows,num_ues,num_samples,avg_dl_throughput_mbps,p5_dl_throughput_mbps,avg_max_cell_load,handover_events,handovers_per_1000_ue_samples
+100,25,4,0.40818,0.025,0.03125,0,0.0
