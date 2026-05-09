@@ -14,8 +14,6 @@ from torch_geometric.nn import GCNConv
 from .simulator import CellularNetworkEnv, LTEConfig
 
 # Transition: (state, action, reward, next_state, done, next_valid_mask)
-# next_valid_mask is a boolean array over the model's num_cells action space,
-# including any padded (inactive) nodes for multi-scenario training.
 Transition = Tuple[np.ndarray, int, float, np.ndarray, bool, np.ndarray]
 
 # MPS has too much overhead for small per-UE forward passes. CPU is faster here.
@@ -27,16 +25,16 @@ class DQNConfig:
     hidden_dim: int = 128
     num_gcn_layers: int = 3
     dropout: float = 0.1
-    gamma: float = 0.95
-    learning_rate: float = 3e-4
-    batch_size: int = 64
-    replay_capacity: int = 100_000
+    gamma: float = 0.97
+    learning_rate: float = 1e-4
+    batch_size: int = 128
+    replay_capacity: int = 300_000
     train_every: int = 4
-    target_update_every: int = 500
+    target_update_every: int = 1000
     grad_clip: float = 1.0
     epsilon_start: float = 1.0
-    epsilon_end: float = 0.05
-    epsilon_decay_episodes: int = 300  # ~70% of total_episodes; override per run
+    epsilon_end: float = 0.03
+    epsilon_decay_episodes: int = 350
     dueling: bool = True
     double_dqn: bool = True
 
@@ -88,6 +86,7 @@ class GnnDQNAgent(nn.Module):
         self.dropout = nn.Dropout(cfg.dropout)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_weight: torch.Tensor) -> torch.Tensor:
+        # x: (N, D) or (B*N, D)
         h = F.relu(self.gcn1(x, edge_index, edge_weight))
         h = self.dropout(h)
         h = F.relu(self.gcn2(h, edge_index, edge_weight))
@@ -97,9 +96,18 @@ class GnnDQNAgent(nn.Module):
         if self.cfg.dueling:
             value = self.value_stream(h).squeeze(-1)
             advantage = self.advantage_stream(h).squeeze(-1)
-            q = value + (advantage - advantage.mean())
+            
+            # Reshape to (Batch, Nodes) if h is batched
+            if value.shape[0] > self.num_cells:
+                value = value.view(-1, self.num_cells)
+                advantage = advantage.view(-1, self.num_cells)
+                q = value + (advantage - advantage.mean(dim=1, keepdim=True))
+            else:
+                q = value + (advantage - advantage.mean())
         else:
             q = self.q_head(h).squeeze(-1)
+            if q.shape[0] > self.num_cells:
+                q = q.view(-1, self.num_cells)
         return q
 
     def act(self, x: torch.Tensor, edge_index: torch.Tensor, edge_weight: torch.Tensor,
@@ -114,7 +122,6 @@ class GnnDQNAgent(nn.Module):
 
         valid_actions = valid_mask.nonzero(as_tuple=True)[0].numpy()
         if len(valid_actions) == 0:
-            # Safety: if caller passed an all-false mask, fall back to argmax on all cells.
             valid_mask = torch.ones(self.num_cells, dtype=torch.bool)
             valid_actions = np.arange(self.num_cells)
 
@@ -139,31 +146,42 @@ def _train_step(
     optimizer: torch.optim.Optimizer,
     cfg: DQNConfig,
 ) -> float:
-    states = torch.stack([torch.from_numpy(s).float() for s, *_ in batch]).to(DEVICE)
-    next_states = torch.stack([torch.from_numpy(t[3]).float() for t in batch]).to(DEVICE)
-    actions = [t[1] for t in batch]
+    batch_size = len(batch)
+    num_cells = agent.num_cells
+    
+    # Flatten states for a single GNN forward pass: (B*N, D)
+    states_list = [torch.from_numpy(s).float() for s, *_ in batch]
+    next_states_list = [torch.from_numpy(t[3]).float() for t in batch]
+    
+    states = torch.cat(states_list, dim=0).to(DEVICE)
+    next_states = torch.cat(next_states_list, dim=0).to(DEVICE)
+    
+    actions = torch.tensor([t[1] for t in batch], dtype=torch.long, device=DEVICE)
     rewards = torch.tensor([t[2] for t in batch], dtype=torch.float, device=DEVICE)
     dones = torch.tensor([float(t[4]) for t in batch], dtype=torch.float, device=DEVICE)
 
-    # Next-state valid-action masks. If absent (older transitions), default to all-valid.
     next_masks = []
     for t in batch:
         if len(t) >= 6 and t[5] is not None:
             next_masks.append(torch.from_numpy(np.asarray(t[5], dtype=bool)))
         else:
-            next_masks.append(torch.ones(agent.num_cells, dtype=torch.bool))
+            next_masks.append(torch.ones(num_cells, dtype=torch.bool))
     next_mask = torch.stack(next_masks).to(DEVICE)  # (B, num_cells)
 
+    # Replicate edge_index and edge_weight for the batch
     ei = edge_index.to(DEVICE)
     ew = edge_weight.to(DEVICE)
+    
+    ei_batch = torch.cat([ei + i * num_cells for i in range(batch_size)], dim=1)
+    ew_batch = ew.repeat(batch_size)
 
     with torch.no_grad():
-        # Target net Q at next states (for all cells).
-        q_next_target = torch.stack([target_net(ns, ei, ew) for ns in next_states])
+        # Target net Q: (B, num_cells)
+        q_next_target = target_net(next_states, ei_batch, ew_batch)
 
         if cfg.double_dqn:
-            # Double-DQN: select action with online net, evaluate with target net.
-            q_next_online = torch.stack([agent(ns, ei, ew) for ns in next_states])
+            # Online net Q for action selection: (B, num_cells)
+            q_next_online = agent(next_states, ei_batch, ew_batch)
             q_next_online = q_next_online.masked_fill(~next_mask, float("-inf"))
             next_actions = q_next_online.argmax(dim=1)
             q_max = q_next_target.gather(1, next_actions.unsqueeze(1)).squeeze(1)
@@ -171,12 +189,12 @@ def _train_step(
             q_next_masked = q_next_target.masked_fill(~next_mask, float("-inf"))
             q_max = q_next_masked.max(dim=1).values
 
-        # Terminal / all-invalid safety: if a row has no valid action, q_max is -inf;
-        # force it to 0 so target = reward only.
         q_max = torch.where(torch.isfinite(q_max), q_max, torch.zeros_like(q_max))
         targets = rewards + cfg.gamma * q_max * (1.0 - dones)
 
-    q_pred = torch.stack([agent(s, ei, ew)[a] for s, a in zip(states, actions)])
+    # Current Q values: (B, num_cells)
+    q_pred_all = agent(states, ei_batch, ew_batch)
+    q_pred = q_pred_all.gather(1, actions.unsqueeze(1)).squeeze(1)
 
     loss = F.smooth_l1_loss(q_pred, targets)
     optimizer.zero_grad()
@@ -247,23 +265,22 @@ def train_gnn_dqn(
         metrics["episode_reward"] = float(episode_reward)
         history.append(metrics)
 
-        # Track best-performing episode (after exploration has cooled a bit).
         if episode >= max(5, train_episodes // 10) and episode_reward > best_reward:
             best_reward = episode_reward
             best_state = copy.deepcopy(agent.state_dict())
             best_episode = episode + 1
 
-        if verbose and (episode + 1) % max(1, train_episodes // 20) == 0:
+        if verbose and (episode + 1) % 5 == 0:
             print(
                 f"[{episode + 1:04d}/{train_episodes}] "
                 f"eps={epsilon:.3f} "
                 f"avg_thr={metrics['avg_ue_throughput_mbps']:.3f} "
                 f"load_std={metrics['load_std']:.3f} "
                 f"loss={metrics['loss']:.4f} "
-                f"reward={episode_reward:.1f}"
+                f"reward={episode_reward:.1f}",
+                flush=True
             )
 
-    # Restore best checkpoint (if one was saved).
     if best_episode > 0:
         agent.load_state_dict(best_state)
         if verbose:

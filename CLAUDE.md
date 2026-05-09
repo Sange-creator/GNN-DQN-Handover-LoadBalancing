@@ -11,18 +11,19 @@
 4. Outperforms rule-based (A3, ReBuHa) and learning-based (CDQL, flat-DQN) baselines
 5. Is designed for O-RAN near-RT RIC xApp deployment (future work)
 
-**Deadline:** May 14, 2026 (7 days from May 7)
+**Deadline:** May 14, 2026 (5 days remaining from May 9)
 **Target:** Journal publication (IEEE TVT, Computer Networks, or IEEE Access)
 
 ---
 
-## Current Status (2026-05-08)
+## Current Status (2026-05-09)
 
 ### Completed
 - **Code:** All 8 modules in `handover_gnn_dqn/` fully implemented; 6 baselines wired up; ns-3 exporter verified (3 runs in `data/ns3/`).
 - **Data:** 75 real Pokhara cells + 150 Kathmandu cells from OpenCellID in `data/opencellid/`.
 - **Overnight Pokhara training:** Finished 2026-05-08 08:01 (7.2h on M1 Pro, single-topology, 15 cells × 90 UEs, 100 episodes × 80 steps). Checkpoints + history at `results/overnight/`.
 - **10-seed evaluation on Pokhara:** All 6 methods compared, summary.csv written.
+- **Git initialized:** Repo on main branch with initial commit.
 
 ### Honest results from `results/overnight/summary.csv`
 | Method | Avg Mbps (±CI95) | P5 Mbps | Load Std | HO/1000 |
@@ -42,24 +43,44 @@
 The numbers in `REPORT.md` (GNN-DQN +6.4% over strongest_rsrp) are from a 12-episode run on a 9-cell synthetic topology (`run_experiment.py --train-episodes 12 --steps 60 --test-episodes 5`) and **do not match** the production overnight results above. Treat `REPORT.md` as a dev-stage artifact, not a citable result.
 
 ### In progress
-- **Multi-scenario training** (`run_full_training.py`, PID 45328, started 11:40, episode ~30/120, ETA ~22:00 today). Trains a single GNN-DQN across 6 scenarios (dense_urban, highway, suburban, sparse_rural, overloaded_event, real_pokhara) then evaluates on 3 unseen scenarios (kathmandu_real, dharan_synthetic, unknown_hex_grid). This is the run that proves the topology-invariance contribution. Output will land in `results/full_training/`.
+- **Multi-scenario training** (`run_full_training.py`, started 2026-05-08 11:40). Trains a single GNN-DQN across 6 scenarios (300 episodes × 80 steps) then evaluates on 3 unseen scenarios. Output: `results/full_training/`.
 
 ### Not started
 - Diagnosis of why GNN-DQN regresses on the single-topology Pokhara run (reward weights, epsilon schedule, action masking, training length).
 - Zero-shot eval of the existing `gnn_dqn_pokhara.pt` checkpoint on Kathmandu / Dharan (independent of the multi-scenario run).
 - Figures (training curves, comparison bars with CI, CDF, topology map, load heatmap).
 - LaTeX paper / thesis report draft.
-- Git init.
 
-### Calibration vs original CLAUDE.md targets
+---
+
+## Known Issues (2026-05-09)
+
+### Critical: GNN-DQN underperforms heuristics
+The model is 10% worse than "strongest RSRP" — a trivial signal-following rule. Root causes:
+1. **Undertrained** — 100 episodes is insufficient; loss still climbing at termination. Need 500+.
+2. **Reward function misweighted** — agent optimizes a blend of throughput + load + handover penalty, but weights may not push throughput high enough.
+3. **Epsilon decays too fast** — overnight run decayed over 80 episodes (should be 300). Agent exploits a bad policy before exploring enough.
+4. **Only 80 steps/episode** — target is 200 steps. Too few transitions per episode.
+
+### Multi-scenario training concerns
+5. **Replay buffer split thin** — 100K / 6 scenarios = ~16K per scenario. May be insufficient.
+6. **Only 5 eval seeds** — need 20 for publishable confidence intervals.
+7. **300 episodes across 6 scenarios** — each scenario gets ~50 episodes on average. May need 500+ total.
+
+### Paper/deadline risks
+8. **No paper draft** — deadline is May 14 (5 days).
+9. **Generalization unproven** — multi-scenario run results not yet available.
+10. **REPORT.md has wrong numbers** — based on toy 12-episode run, not real results.
+
+### Calibration vs targets
 | Target (original) | Actual | Gap |
 |---|---|---|
-| 500 episodes per run | 100 | 5× short |
-| 20 evaluation seeds | 10 | 2× short |
-| Replay 100K | 100K | ✓ |
-| epsilon decay 300 ep | 80 ep (overnight) | decays too fast for short runs |
+| 500 episodes per run | 100 (overnight), 300 (multi) | 2-5× short |
+| 20 evaluation seeds | 5-10 | 2-4× short |
+| 200 steps/episode | 80 | 2.5× short |
+| Replay 100K | 100K (but split across 6) | ~16K effective |
+| epsilon decay 300 ep | 80 (overnight), 210 (multi) | overnight too fast |
 | Inference <10ms | not measured | TBD |
-| 95% CIs from 20+ seeds | 95% CIs from 10 seeds | acceptable, not target |
 
 ---
 
@@ -94,14 +115,16 @@ Input (12 features per cell node)
 ```
 
 ### Training Configuration
-- Episodes: 500+
-- Steps per episode: 200
-- Transitions target: 2-5 million
-- Seeds: 20 (for statistical confidence)
+- Episodes: 500+ (target); currently 100 (overnight), 300 (multi-scenario)
+- Steps per episode: 200 (target); currently 80
+- Transitions target: 2-5 million; currently ~720K (300 ep × 80 steps × ~30 UEs avg)
+- Seeds: 20 (target); currently 5-10
 - Optimizer: Adam (lr=3e-4)
-- Replay buffer: 100K transitions
+- Replay buffer: 100K transitions (split ~16K per scenario in multi-scenario mode)
 - Target network update: every 500 steps
-- Epsilon: 1.0 → 0.05 (linear decay over 300 episodes)
+- Epsilon: 1.0 → 0.05 (linear decay over 210 episodes in multi-scenario run)
+- Train every: 4 decisions
+- Batch size: 64
 
 ---
 
@@ -126,16 +149,44 @@ Input (12 features per cell node)
 
 ---
 
+## Training & Test Scenarios
+
+### Training Scenarios (6 — model cycles through all)
+| # | Scenario | Cells | UEs | What it simulates |
+|---|----------|-------|-----|-------------------|
+| 1 | Dense Urban | 20 | 250 | Lakeside/Kathmandu crowded area |
+| 2 | Highway | 10 | 50 | Fast-moving vehicles (80-120 km/h) |
+| 3 | Suburban | 15 | 105 | Medium density residential |
+| 4 | Sparse Rural | 7 | 25 | Hills, few towers, low traffic |
+| 5 | Overloaded Event | 12 | 240 | Festival/concert extreme congestion |
+| 6 | Real Pokhara | ~20 | variable | Actual cell positions from OpenCellID |
+
+### Test Scenarios (3 — NEVER seen during training, proves generalization)
+| # | Scenario | Cells | UEs | Purpose |
+|---|----------|-------|-----|---------|
+| 1 | Kathmandu Real | 25 | ~175 | Real city, real positions → works on new place |
+| 2 | Dharan Synthetic | 20 | 100 | Synthetic terrain (no OpenCellID coverage) |
+| 3 | Unknown Hex Grid | 19 | 133 | Standard 3GPP layout, completely different structure |
+
+The GNN handles any new place (Biratnagar, Birgunj, etc.) by just providing the cell neighbor graph — no retraining needed. Flat DQN breaks on topology changes (fixed input size).
+
+---
+
 ## Comparison Methods (6 total)
 
+### Essential comparisons for paper (minimum 3):
+| # | Method | Type | What it proves |
+|---|--------|------|----------------|
+| 1 | Strongest RSRP | 3GPP default | "Better than dumb signal-following" |
+| 2 | Load-Aware Heuristic | ReBuHa-like | "Justifies ML over smart rules" |
+| 3 | Flat DQN (no GNN) | ML ablation | "GNN architecture matters" |
+| 4 | **GNN-DQN (ours)** | Proposed | Graph-aware deep Q-network |
+
+### Optional (nice-to-have but not critical):
 | # | Method | Type | Description |
 |---|--------|------|-------------|
-| 1 | No Handover | Lower bound | Stay on initial cell |
-| 2 | Strongest RSRP | 3GPP A3-like | Signal-strength handover with hysteresis |
-| 3 | A3 TTT | 3GPP standard | A3 event with time-to-trigger |
-| 4 | Load-Aware Heuristic | ReBuHa-like | Signal + load utility rule |
-| 5 | Flat DQN (no GNN) | ML baseline | Standard DQN without graph structure |
-| 6 | **GNN-DQN (ours)** | Proposed | Graph-aware deep Q-network |
+| 5 | No Handover | Lower bound | Stay on initial cell (trivially bad) |
+| 6 | A3 TTT | 3GPP standard | A3 event with time-to-trigger |
 
 ---
 
@@ -231,7 +282,8 @@ gnn-dqn-handover/
 - [ ] 500-episode run if M1 budget allows
 
 ### Phase 3: Generalization — IN PROGRESS
-- [x] Multi-scenario training started (run_full_training.py, PID 45328, ETA 2026-05-08 ~22:00)
+- [x] Multi-scenario training started (`run_full_training.py`, 300 episodes × 80 steps across 6 training scenarios)
+- [ ] Check multi-scenario run results in `results/full_training/`
 - [ ] Zero-shot eval on Kathmandu_real (25 cells, real positions)
 - [ ] Zero-shot eval on Dharan_synthetic (20 cells)
 - [ ] Zero-shot eval on unknown_hex_grid (19 cells, 3GPP standard layout)
@@ -254,8 +306,8 @@ gnn-dqn-handover/
 - [ ] Related work
 - [ ] Abstract + intro + conclusion
 
-### Phase 6: Repo / Polish — NOT STARTED
-- [ ] `git init` + commit history
+### Phase 6: Repo / Polish — PARTIALLY DONE
+- [x] `git init` + initial commit on main
 - [ ] README cleanup (remove or annotate the toy 12-episode numbers)
 - [ ] Project website with results dashboard
 - [ ] Final proofreading

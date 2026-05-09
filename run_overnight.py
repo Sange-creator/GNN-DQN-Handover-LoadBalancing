@@ -48,7 +48,7 @@ def main():
     print(f"  Cells: {num_cells}")
     print(f"  UEs: {num_ues}")
     print(f"  Area: {area:.0f} m")
-    print(f"  Training: 100 episodes × 80 steps")
+    print(f"  Training: 500 episodes × 80 steps")
     print(f"  Evaluation: 10 seeds")
     print(f"  Estimated time: ~4.5 hours")
     print("=" * 60)
@@ -64,14 +64,14 @@ def main():
         hidden_dim=128,
         num_gcn_layers=3,
         gamma=0.95,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         batch_size=64,
         replay_capacity=100_000,
         train_every=4,
-        target_update_every=500,
+        target_update_every=2000,
         epsilon_start=1.0,
         epsilon_end=0.05,
-        epsilon_decay_episodes=80,
+        epsilon_decay_episodes=350,
     )
 
     # --- TRAIN GNN-DQN ---
@@ -80,7 +80,7 @@ def main():
     gnn_agent, gnn_history = train_gnn_dqn(
         lte_cfg,
         dqn_cfg,
-        train_episodes=100,
+        train_episodes=500,
         steps_per_episode=80,
         seed=42,
         verbose=True,
@@ -103,7 +103,7 @@ def main():
     flat_agent, flat_history = train_flat_dqn(
         lte_cfg,
         dqn_cfg,
-        train_episodes=100,
+        train_episodes=500,
         steps_per_episode=80,
         seed=42,
         verbose=True,

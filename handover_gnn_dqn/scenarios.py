@@ -65,7 +65,7 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
     scenarios.append(Scenario(
         name="dense_urban",
         num_cells=20,
-        num_ues=250,  # ~12 UEs/cell (heavy)
+        num_ues=160,  # 8 UEs/cell (heavy but tractable for training)
         area_m=get_area_size(dense_pos),
         cell_positions=dense_pos,
         min_speed_mps=0.5,   # some static
@@ -74,7 +74,10 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
     ))
 
     # 2. HIGHWAY (Prithvi Highway, fast mobility)
-    highway_pos = _highway_layout(10, isd_m=1500)
+    # Use 800m ISD so total span ~7.2km fits in a square area where UEs
+    # remain within coverage. Original 1500m ISD caused 70% outage because
+    # UEs scattered in 16km×16km but cells only covered a thin line.
+    highway_pos = _highway_layout(10, isd_m=800)
     scenarios.append(Scenario(
         name="highway",
         num_cells=10,
@@ -83,7 +86,7 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
         cell_positions=highway_pos,
         min_speed_mps=15.0,  # all vehicular
         max_speed_mps=28.0,  # 60-100 km/h
-        description="Highway: 1.5km ISD, fast mobility, too-late HO problem",
+        description="Highway: 800m ISD, fast mobility, too-late HO problem",
     ))
 
     # 3. SUBURBAN (Chipledhunga, medium density)
@@ -117,7 +120,7 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
     scenarios.append(Scenario(
         name="overloaded_event",
         num_cells=12,
-        num_ues=240,  # 20 UEs/cell (extreme)
+        num_ues=156,  # 13 UEs/cell (heavy congestion)
         area_m=get_area_size(event_pos),
         cell_positions=event_pos,
         min_speed_mps=0.0,  # mostly standing

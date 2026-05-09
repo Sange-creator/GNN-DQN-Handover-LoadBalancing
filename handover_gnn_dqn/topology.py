@@ -185,10 +185,12 @@ def build_adjacency_from_positions(
     positions: np.ndarray,
     k_neighbors: int = 4,
 ) -> np.ndarray:
-    """Build normalized adjacency from cell positions.
+    """Build raw weighted adjacency from cell positions.
 
     Edges connect each cell to its k nearest neighbors with
-    distance-weighted connections. Returns symmetric normalized adjacency.
+    distance-weighted connections. Returns symmetric adjacency WITHOUT
+    self-loops or normalization — GCNConv(add_self_loops=True) handles
+    both internally.
     """
     n = len(positions)
     d = np.linalg.norm(positions[:, None, :] - positions[None, :, :], axis=2)
@@ -196,15 +198,12 @@ def build_adjacency_from_positions(
     w = np.exp(-d / scale)
     np.fill_diagonal(w, 0.0)
 
-    adj = np.eye(n)
+    adj = np.zeros((n, n))
     for i in range(n):
         nn_idx = np.argsort(d[i])[1: k_neighbors + 1]
         adj[i, nn_idx] = w[i, nn_idx]
     adj = np.maximum(adj, adj.T)
-
-    degree = np.sum(adj, axis=1)
-    inv_sqrt = 1.0 / np.sqrt(np.maximum(degree, 1e-9))
-    return inv_sqrt[:, None] * adj * inv_sqrt[None, :]
+    return adj
 
 
 def load_topology(

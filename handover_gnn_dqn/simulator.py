@@ -43,8 +43,8 @@ class LTEConfig:
     # Raised from 0.08 -> 0.25 so weak-signal UEs don't consume 12.5x their demand.
     quality_floor: float = 0.25
     cell_positions: np.ndarray | None = None
-    # Feature mode: "ue_only" (12 features, phone-measurable) or
-    # "full" (15 features, with 3 eNB-side features from E2/SON interface).
+    # Feature mode: "ue_only" (10 features, phone-measurable) or
+    # "full" (13 features, with 3 eNB-side features from E2/SON interface).
     feature_mode: str = "ue_only"
 
 
@@ -76,7 +76,7 @@ class CellularNetworkEnv:
 
     @property
     def feature_dim(self) -> int:
-        return 12 if self.cfg.feature_mode == "ue_only" else 15
+        return 10 if self.cfg.feature_mode == "ue_only" else 13
 
     @property
     def edge_data(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -87,7 +87,7 @@ class CellularNetworkEnv:
     # ------------------------------------------------------------------
     # Snapshot management
     # ------------------------------------------------------------------
-    def _refresh_snapshot(self) -> None:
+    def _refresh_snapshot(self, reroll_noise: bool = True) -> None:
         """Sample one coherent per-step snapshot of the channel.
 
         All downstream accessors (build_state / cell_loads / user_throughputs /
@@ -98,9 +98,12 @@ class CellularNetworkEnv:
         d_km = np.maximum(self.ue_cell_distances() / 1000.0, 0.035)
         path_loss_db = 128.1 + 37.6 * np.log10(d_km)
         rsrp_mean = self.cfg.tx_power_dbm - path_loss_db + self.shadowing
-        rsrp = rsrp_mean + self.rng.normal(
-            0.0, self.cfg.rsrp_noise_std_db, size=rsrp_mean.shape
-        )
+
+        if reroll_noise or not hasattr(self, "_rsrp_noise"):
+            self._rsrp_noise = self.rng.normal(
+                0.0, self.cfg.rsrp_noise_std_db, size=rsrp_mean.shape
+            )
+        rsrp = rsrp_mean + self._rsrp_noise
         self._rsrp = rsrp
 
         # Compute loads first (needed for RSRQ interference term).
@@ -112,7 +115,11 @@ class CellularNetworkEnv:
             self.serving, weights=pressure, minlength=self.cfg.num_cells
         ) / self.cfg.cell_capacity_mbps
 
-        self._rsrq = self._rsrq_from_rsrp(rsrp, self._loads)
+        if reroll_noise or not hasattr(self, "_rsrq_noise"):
+            self._rsrq_noise = self.rng.normal(
+                0.0, self.cfg.rsrq_noise_std_db, size=rsrp.shape
+            )
+        self._rsrq = self._rsrq_from_rsrp(rsrp, self._loads, reroll_noise=reroll_noise)
 
         # User throughput: share cell capacity proportional to demand.
         load_factor = np.maximum(self._loads[self.serving], 1.0)
@@ -127,7 +134,7 @@ class CellularNetworkEnv:
         )
         self._throughputs = throughput
 
-    def _rsrq_from_rsrp(self, rsrp: np.ndarray, loads: np.ndarray) -> np.ndarray:
+    def _rsrq_from_rsrp(self, rsrp: np.ndarray, loads: np.ndarray, reroll_noise: bool = True) -> np.ndarray:
         """Vectorized RSRQ computation from a given rsrp snapshot + loads."""
         cfg = self.cfg
         rsrp_linear = 10.0 ** (rsrp / 10.0)
@@ -148,8 +155,7 @@ class CellularNetworkEnv:
         rsrq_linear = cfg.num_prbs * rsrp_linear / np.maximum(rssi, 1e-20)
         rsrq_db = 10.0 * np.log10(np.maximum(rsrq_linear, 1e-20))
         rsrq_db = np.clip(rsrq_db, -20.0, -3.0)
-        noise = self.rng.normal(0.0, cfg.rsrq_noise_std_db, size=rsrq_db.shape)
-        return rsrq_db + noise
+        return rsrq_db + self._rsrq_noise
 
     # ------------------------------------------------------------------
     # Setup / reset
@@ -305,20 +311,18 @@ class CellularNetworkEnv:
         3. rsrp_delta: RSRP(cell) - RSRP(serving) normalized
         4. rsrq_delta: RSRQ(cell) - RSRQ(serving) normalized
         5. rsrp_trend: RSRP change since last step (improving/degrading)
-        6. estimated_load: Load estimated from RSRQ
-        7. estimated_spare: 1 - estimated_load
-        8. is_serving: Binary indicator
-        9. signal_usable: Whether RSRP > threshold
-        10. ue_speed_class: Normalized speed (0=static, 1=fast)
-        11. time_since_ho: Normalized time since last handover
-        12. was_previous_serving: 1 if UE was previously on this cell
+        6. is_serving: Binary indicator
+        7. signal_usable: Whether RSRP > threshold
+        8. ue_speed_class: Normalized speed (0=static, 1=fast)
+        9. time_since_ho: Normalized time since last handover
+        10. was_previous_serving: 1 if UE was previously on this cell
 
         Network-side features (only present when feature_mode='full';
         these come from E2/SON in O-RAN deployment, NOT available to a
         phone-only deployment):
-        13. prb_utilization: Actual PRB load (0-1)
-        14. connected_ue_count: Normalized number of UEs on this cell
-        15. cell_throughput_norm: Average throughput per cell (normalized)
+        11. prb_utilization: Actual PRB load (0-1)
+        12. connected_ue_count: Normalized number of UEs on this cell
+        13. cell_throughput_norm: Average throughput per cell (normalized)
         """
         cfg = self.cfg
         rsrp = self._rsrp[ue_idx]
@@ -336,9 +340,6 @@ class CellularNetworkEnv:
 
         prev_rsrp = self._prev_rsrp[ue_idx] if hasattr(self, '_prev_rsrp') else rsrp
         rsrp_trend = np.clip((rsrp - prev_rsrp + 5.0) / 10.0, 0.0, 1.0)
-
-        estimated_load = self.load_from_rsrq(rsrq)
-        estimated_spare = 1.0 - estimated_load
 
         is_serving = np.zeros(cfg.num_cells)
         is_serving[current] = 1.0
@@ -363,8 +364,6 @@ class CellularNetworkEnv:
             rsrp_delta,
             rsrq_delta,
             rsrp_trend,
-            estimated_load,
-            estimated_spare,
             is_serving,
             signal_usable,
             ue_speed_class,
@@ -423,15 +422,10 @@ class CellularNetworkEnv:
         return self.build_state(ue_idx), reward, False, info
 
     def user_reward(self, ue_idx: int, old_cell: int, target_cell: int) -> float:
-        """Multi-objective reward balancing throughput, load, handovers, and outage.
+        """Multi-objective reward: throughput-dominant with strong handover penalty.
 
-        Reward design principles (after re-weighting):
-        - Throughput dominates: uses satisfaction + log-shaped absolute throughput
-          so the agent gets signal even when congestion limits absolute rates.
-        - load_std is BOUNDED to [0, 1] so a pathological regime can't drown
-          out throughput gains.
-        - overload weight reduced - the agent can't create capacity, only
-          distribute it.
+        The agent must only handover when the throughput gain clearly justifies
+        the switching cost. Staying on a good cell is explicitly rewarded.
         """
         throughputs = self._throughputs
         loads = self._loads
@@ -440,30 +434,40 @@ class CellularNetworkEnv:
         satisfaction = np.clip(
             throughputs[ue_idx] / max(self.demands[ue_idx], 1e-6), 0.0, 1.2
         )
-        # Log-shaped absolute throughput: rewards moves that raise absolute
-        # Mbps even if demand is never met (common in overloaded regimes).
         thr_bonus = np.log2(1.0 + max(throughputs[ue_idx], 0.0)) / 4.0
 
-        # Bound load_std so it can't dominate: typical std in [0, 0.5] after
-        # capacity fix; cap at 1.0 for safety.
         load_std = float(min(np.std(loads), 1.0))
         overload = float(np.mean(np.maximum(loads - 1.0, 0.0)))
 
         handover = float(old_cell != target_cell)
+
+        # Escalating penalty for frequent handovers.
+        steps_since_last = self.step_index - self.last_handover_step[ue_idx]
+        ho_recency_penalty = 0.0
+        if handover and steps_since_last < 10:
+            ho_recency_penalty = 1.0 * (1.0 - steps_since_last / 10.0)
+
         pingpong = float(
             target_cell == self.previous_cell[ue_idx]
-            and self.step_index - self.last_handover_step[ue_idx] <= self.cfg.pingpong_window_steps
+            and steps_since_last <= self.cfg.pingpong_window_steps
         ) if handover else 0.0
         outage = float(rsrp < self.cfg.min_rsrp_dbm)
+
+        # Stay bonus: reward for not switching when signal is adequate.
+        stay_bonus = 0.0
+        if not handover and rsrp >= self.cfg.min_rsrp_dbm + 6.0:
+            stay_bonus = 0.5
 
         return float(
             3.0 * satisfaction
             + 1.0 * thr_bonus
+            + stay_bonus
             - 0.4 * load_std
             - 0.3 * overload
-            - 0.10 * handover
-            - 0.4 * pingpong
-            - 1.0 * outage
+            - 2.0 * handover
+            - ho_recency_penalty
+            - 5.0 * pingpong
+            - 1.5 * outage
         )
 
     def metrics(self) -> Dict[str, float]:

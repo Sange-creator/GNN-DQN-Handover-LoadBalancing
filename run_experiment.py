@@ -46,7 +46,9 @@ def main() -> None:
     print(f"=== GNN-DQN Handover Optimization ===")
     print(f"Cells: {lte_cfg.num_cells}, UEs: {lte_cfg.num_ues}")
     print(f"Training: {args.train_episodes} episodes × {args.steps} steps")
-    print(f"Features per node: 12 (UE-observable)")
+    from handover_gnn_dqn.simulator import CellularNetworkEnv
+    env_tmp = CellularNetworkEnv(lte_cfg)
+    print(f"Features per node: {env_tmp.feature_dim} (UE-observable)")
     print(f"Architecture: 3-layer GCN + Dueling DQN")
     print()
 
