@@ -10,6 +10,7 @@ from typing import Iterable, List
 
 import numpy as np
 import torch
+from torch import nn
 
 from ..env import CellularNetworkEnv, LTEConfig
 from ..metrics import default_policy_factories, evaluate_policies, write_summary_csv
@@ -92,6 +93,11 @@ def training_validation_score(metrics: dict[str, float]) -> float:
     )
 
 
+def _soft_update(target: nn.Module, source: nn.Module, tau: float) -> None:
+    for tp, sp in zip(target.parameters(), source.parameters()):
+        tp.data.mul_(1.0 - tau).add_(sp.data, alpha=tau)
+
+
 def train_multi_scenario(
     scenarios: List[Scenario],
     dqn_cfg: DQNConfig,
@@ -121,11 +127,15 @@ def train_multi_scenario(
 
     agent = GnnDQNAgent(max_cells, feature_dim, dqn_cfg, seed=seed)
     target_net = copy.deepcopy(agent)
-    optimizer = torch.optim.Adam(agent.parameters(), lr=dqn_cfg.learning_rate)
+    optimizer = torch.optim.Adam(agent.parameters(), lr=dqn_cfg.learning_rate, weight_decay=dqn_cfg.weight_decay)
     best_score = float("-inf")
     best_state = copy.deepcopy(agent.state_dict())
     best_episode = 0
     scenario_edge_cache: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
+
+    avg_ues = sum(s.num_ues for s in scenarios) / max(len(scenarios), 1)
+    est_grad_steps = max(int(steps_per_episode * avg_ues * total_episodes) // dqn_cfg.train_every, 1)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=est_grad_steps, eta_min=dqn_cfg.lr_min)
 
     if resume_payload is not None:
         agent.load_state_dict(resume_payload["state_dict"])
@@ -146,6 +156,8 @@ def train_multi_scenario(
             best_state = copy.deepcopy(agent.state_dict())
         if training_state.get("rng_state") is not None:
             rng.bit_generator.state = training_state["rng_state"]
+        if training_state.get("scheduler_state_dict") is not None:
+            scheduler.load_state_dict(training_state["scheduler_state_dict"])
         history = list(resume_payload.get("history", []))
 
     if verbose:
@@ -222,7 +234,10 @@ def train_multi_scenario(
                 if replay.can_sample(scenario.name, dqn_cfg.batch_size) and decisions % dqn_cfg.train_every == 0:
                     batch = replay.sample(scenario.name, rng, dqn_cfg.batch_size)
                     losses.append(_train_step(agent, target_net, batch, edge_index, edge_weight, optimizer, dqn_cfg))
-                if decisions % dqn_cfg.target_update_every == 0:
+                    scheduler.step()
+                    if dqn_cfg.tau > 0:
+                        _soft_update(target_net, agent, dqn_cfg.tau)
+                if dqn_cfg.tau == 0 and decisions % dqn_cfg.target_update_every == 0:
                     target_net.load_state_dict(agent.state_dict())
                 decisions += 1
 
@@ -285,6 +300,7 @@ def train_multi_scenario(
                         "best_score": best_score,
                         "rng_state": rng.bit_generator.state,
                         "replay_included": checkpoint_include_replay,
+                        "scheduler_state_dict": scheduler.state_dict(),
                     },
                     best_state_dict=best_state,
                     checkpoint_kind="resume",

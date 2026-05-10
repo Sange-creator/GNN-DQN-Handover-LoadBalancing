@@ -31,7 +31,10 @@ class DQNConfig:
     replay_capacity: int = 300_000
     train_every: int = 4
     target_update_every: int = 1000
+    tau: float = 0.005
     grad_clip: float = 1.0
+    lr_min: float = 1e-5
+    weight_decay: float = 1e-5
     epsilon_start: float = 1.0
     epsilon_end: float = 0.03
     epsilon_decay_episodes: int = 350
