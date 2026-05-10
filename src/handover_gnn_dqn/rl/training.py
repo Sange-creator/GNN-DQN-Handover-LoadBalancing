@@ -156,7 +156,7 @@ def train_multi_scenario(
         if start_episode:
             print(f"  Resuming from episode {start_episode}/{total_episodes}")
 
-    scenario_order = rng.permutation(len(scenarios))
+    scenario_order = np.arange(len(scenarios))
     for episode in range(start_episode, total_episodes):
         offset = episode - start_episode
         if offset % len(scenarios) == 0:

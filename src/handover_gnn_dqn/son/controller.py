@@ -25,6 +25,9 @@ class SONConfig:
     max_updates_per_cycle: int = 8
     rollback_throughput_drop_frac: float = 0.15
     rollback_pingpong_increase_frac: float = 0.30
+    rollback_pingpong_floor: float = 0.05
+    ttt_decrease_threshold: float = 0.10
+    ttt_cooldown_steps: int = 30
     # Where the SON gets its load signal from. "rsrq_proxy" is what a
     # phone-only deployment can compute from UE measurements; "true_prb"
     # is what a real eNB / near-RT RIC reads from PM counters. The trained
@@ -56,6 +59,7 @@ class SONController:
         self.cio_db: np.ndarray | None = None
         self.ttt_steps: np.ndarray | None = None
         self.last_update_step = -10_000
+        self._last_ttt_change_step = -10_000
         self.update_count = 0
         self.rollback_count = 0
         self.last_metrics: dict[str, float] | None = None
@@ -67,6 +71,7 @@ class SONController:
         self.cio_db = np.zeros((n, n), dtype=float)
         self.ttt_steps = np.full((n, n), self.config.base_ttt_steps, dtype=int)
         self.last_update_step = -10_000
+        self._last_ttt_change_step = -10_000
         self.update_count = 0
         self.rollback_count = 0
         self.last_metrics = None
@@ -96,7 +101,14 @@ class SONController:
             overload_reason = "target_prb_overloaded"
         else:
             rsrq_load_proxy = env.load_from_rsrq(env._compute_rsrq())
-            target_load = lambda t: float(np.mean(rsrq_load_proxy[:, t]))
+
+            def _served_load(t: int) -> float:
+                served_mask = env.serving == t
+                if not np.any(served_mask):
+                    return 0.0
+                return float(np.mean(rsrq_load_proxy[served_mask, t]))
+
+            target_load = _served_load
             overload_reason = "target_load_proxy_high"
 
         candidates: list[tuple[float, SONUpdate]] = []
@@ -148,8 +160,14 @@ class SONController:
             self.cio_db[update.source_cell, update.target_cell] = update.new_cio_db
 
         pingpong_rate = env.pingpong_handovers / max(env.total_handovers, 1)
-        if pingpong_rate > 0.30 and self.ttt_steps is not None:
-            self.ttt_steps[:] = np.minimum(self.ttt_steps + 1, self.config.max_ttt_steps)
+        cooldown_elapsed = env.step_index - self._last_ttt_change_step >= self.config.ttt_cooldown_steps
+        if self.ttt_steps is not None and cooldown_elapsed:
+            if pingpong_rate > 0.30:
+                self.ttt_steps[:] = np.minimum(self.ttt_steps + 1, self.config.max_ttt_steps)
+                self._last_ttt_change_step = env.step_index
+            elif pingpong_rate < self.config.ttt_decrease_threshold:
+                self.ttt_steps[:] = np.maximum(self.ttt_steps - 1, self.config.base_ttt_steps)
+                self._last_ttt_change_step = env.step_index
 
         self.updates.extend(applied)
         self.update_count += len(applied)
@@ -206,9 +224,12 @@ class SONController:
             previous_thr > 1e-9
             and current_thr < previous_thr * (1.0 - self.config.rollback_throughput_drop_frac)
         )
-        pingpong_bad = current_pingpong > previous_pingpong * (
-            1.0 + self.config.rollback_pingpong_increase_frac
-        ) + 1e-9
+        pingpong_bad = (
+            current_pingpong > self.config.rollback_pingpong_floor
+            and current_pingpong > previous_pingpong * (
+                1.0 + self.config.rollback_pingpong_increase_frac
+            ) + 1e-9
+        )
         if throughput_bad or pingpong_bad:
             self.cio_db[:] = self._previous_cio
             self.rollback_count += 1

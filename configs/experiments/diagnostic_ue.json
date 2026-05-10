@@ -32,6 +32,6 @@
     "target_update_every": 800,
     "epsilon_start": 1.0,
     "epsilon_end": 0.05,
-    "epsilon_decay_episodes": 80
+    "epsilon_decay_episodes": 50
   }
 }

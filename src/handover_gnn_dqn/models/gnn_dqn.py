@@ -121,20 +121,23 @@ class GnnDQNAgent(nn.Module):
         h = F.relu(self.gcn3(h, edge_index, edge_weight))
 
         if self.cfg.dueling:
-            value = self.value_stream(h).squeeze(-1)
             advantage = self.advantage_stream(h).squeeze(-1)
 
             if batch_size is not None and nodes_per_graph is not None:
                 expected = batch_size * nodes_per_graph
-                if value.shape[0] != expected:
+                if advantage.shape[0] != expected:
                     raise ValueError(
-                        f"Batched GNN input has {value.shape[0]} nodes, expected {expected} "
+                        f"Batched GNN input has {advantage.shape[0]} nodes, expected {expected} "
                         f"({batch_size} x {nodes_per_graph})"
                     )
-                value = value.view(batch_size, nodes_per_graph)
+                h_batched = h.view(batch_size, nodes_per_graph, -1)
+                h_pooled = h_batched.mean(dim=1)
+                value = self.value_stream(h_pooled)
                 advantage = advantage.view(batch_size, nodes_per_graph)
                 q = value + (advantage - advantage.mean(dim=1, keepdim=True))
             else:
+                h_pooled = h.mean(dim=0, keepdim=True)
+                value = self.value_stream(h_pooled).squeeze()
                 q = value + (advantage - advantage.mean())
         else:
             q = self.q_head(h).squeeze(-1)
