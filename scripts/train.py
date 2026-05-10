@@ -47,11 +47,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train GNN-DQN from a JSON experiment config.")
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--resume", type=Path, default=None, help="Resume from a compatible resume checkpoint.")
+    parser.add_argument(
+        "--allow-existing-out-dir",
+        action="store_true",
+        help="Allow writing into a non-empty output directory. Prefer archiving old runs instead.",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     run_name = cfg.get("run_name", args.config.stem)
     out_dir = Path(cfg.get("out_dir", f"results/runs/{run_name}"))
+    if (
+        out_dir.exists()
+        and any(out_dir.iterdir())
+        and args.resume is None
+        and not args.allow_existing_out_dir
+    ):
+        raise SystemExit(
+            f"{out_dir} already contains outputs. Archive or move it before a clean run, "
+            "or pass --allow-existing-out-dir for an intentional overwrite/trial."
+        )
     out_dir.mkdir(parents=True, exist_ok=True)
 
     feature_mode = cfg.get("feature_mode", "ue_only")

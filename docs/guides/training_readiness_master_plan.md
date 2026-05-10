@@ -41,6 +41,13 @@ standard A3 execution.
 - `smoke_ue` and `smoke_oran` train without NaNs or invalid actions.
 - Kathmandu 25-cell evaluation does not crash.
 - Urban/suburban/highway scenarios do not show artificial outage from geometry bugs.
+- Checkpoint metadata is inspected with `scripts/check_checkpoint.py` before any
+  result is cited.
+- Evaluation tables are summarized with `scripts/summarize_evaluation.py` before
+  a diagnostic or final run is accepted.
+- Existing run directories are archived before clean reruns. `scripts/train.py`
+  now refuses to write into a non-empty output directory unless resuming or
+  explicitly passed `--allow-existing-out-dir`.
 
 ## Training Order
 
@@ -50,6 +57,28 @@ standard A3 execution.
 4. `python3 scripts/train.py --config configs/experiments/multiscenario_ue.json`
 5. Evaluate with 20 seeds and treat `son_gnn_dqn` as the deployable method.
 6. Run `oran_demo` only after the UE-only result is stable.
+
+For clean v3 runs, expected metadata is:
+
+- `model_version = gnn_dqn_v3_graph_value_head`
+- `reward_version = throughput_fairness_pingpong_v3`
+- `feature_profile = ue_only` for the main paper path
+- `prb_available = false` for the main paper path
+
+Example metadata check:
+
+```bash
+python3 scripts/check_checkpoint.py \
+  results/runs/diagnostic_ue/checkpoints/gnn_dqn.pt \
+  --feature-profile ue_only \
+  --feature-dim 11
+```
+
+Example evaluation gate:
+
+```bash
+python3 scripts/summarize_evaluation.py results/runs/diagnostic_ue/evaluation
+```
 
 Resume a long run only with the same config:
 
