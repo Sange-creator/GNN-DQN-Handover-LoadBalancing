@@ -18,7 +18,7 @@ from ..models.gnn_dqn import Transition, _train_step
 from ..topology import Scenario
 
 MODEL_VERSION = "gnn_dqn_v3_graph_value_head"
-REWARD_VERSION = "throughput_fairness_pingpong_v2"
+REWARD_VERSION = "throughput_fairness_pingpong_v3"
 
 
 class ScenarioReplayBuffer:
@@ -78,18 +78,17 @@ def make_env_from_scenario(scenario: Scenario, feature_mode: str = "ue_only", pr
 def training_validation_score(metrics: dict[str, float]) -> float:
     """Single scalar used only for best-checkpoint selection.
 
-    It intentionally favors defensible behavior (P5 throughput, stable load,
-    low outage/ping-pong) over raw reward, which can be noisy early in DQN
-    training.
+    Weights tuned to select policies that beat A3/TTT: high throughput,
+    strong load fairness, low handover rate (A3 does ~12/k decisions).
     """
     return float(
         2.0 * metrics.get("p5_ue_throughput_mbps", 0.0)
-        + 0.8 * metrics.get("avg_ue_throughput_mbps", 0.0)
-        + 0.4 * metrics.get("jain_load_fairness", 0.0)
-        - 0.25 * metrics.get("load_std", 0.0)
-        - 1.5 * metrics.get("outage_rate", 0.0)
-        - 0.8 * metrics.get("pingpong_rate", 0.0)
-        - 0.002 * metrics.get("handovers_per_1000_decisions", 0.0)
+        + 1.0 * metrics.get("avg_ue_throughput_mbps", 0.0)
+        + 1.2 * metrics.get("jain_load_fairness", 0.0)
+        - 0.5 * metrics.get("load_std", 0.0)
+        - 2.0 * metrics.get("outage_rate", 0.0)
+        - 1.5 * metrics.get("pingpong_rate", 0.0)
+        - 0.005 * metrics.get("handovers_per_1000_decisions", 0.0)
     )
 
 
