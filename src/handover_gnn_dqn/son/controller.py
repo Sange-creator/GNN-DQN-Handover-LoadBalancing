@@ -163,11 +163,15 @@ class SONController:
         cooldown_elapsed = env.step_index - self._last_ttt_change_step >= self.config.ttt_cooldown_steps
         if self.ttt_steps is not None and cooldown_elapsed:
             if pingpong_rate > 0.30:
-                self.ttt_steps[:] = np.minimum(self.ttt_steps + 1, self.config.max_ttt_steps)
-                self._last_ttt_change_step = env.step_index
+                next_ttt = np.minimum(self.ttt_steps + 1, self.config.max_ttt_steps)
+                if np.any(next_ttt != self.ttt_steps):
+                    self.ttt_steps[:] = next_ttt
+                    self._last_ttt_change_step = env.step_index
             elif pingpong_rate < self.config.ttt_decrease_threshold:
-                self.ttt_steps[:] = np.maximum(self.ttt_steps - 1, self.config.base_ttt_steps)
-                self._last_ttt_change_step = env.step_index
+                next_ttt = np.maximum(self.ttt_steps - 1, self.config.base_ttt_steps)
+                if np.any(next_ttt != self.ttt_steps):
+                    self.ttt_steps[:] = next_ttt
+                    self._last_ttt_change_step = env.step_index
 
         self.updates.extend(applied)
         self.update_count += len(applied)

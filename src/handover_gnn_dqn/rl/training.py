@@ -17,7 +17,7 @@ from ..models import DQNConfig, GnnDQNAgent, ReplayBuffer
 from ..models.gnn_dqn import Transition, _train_step
 from ..topology import Scenario
 
-MODEL_VERSION = "gnn_dqn_v2_explicit_batching"
+MODEL_VERSION = "gnn_dqn_v3_graph_value_head"
 REWARD_VERSION = "throughput_fairness_pingpong_v2"
 
 
