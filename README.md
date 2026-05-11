@@ -12,9 +12,52 @@ GNN-DQN remains an evaluation baseline.
 
 ## Current Status
 
-This repo has been refactored into a training-ready structure. Results archived under
-`results/archive_prefix/pre_refactor_2026-05-09/` are diagnostic only and should not be
-cited as final results.
+This repo has completed a clean UE-only production training and 20-seed evaluation
+run for `multiscenario_ue`.
+
+Final production checkpoint metadata:
+
+```text
+model_version:    gnn_dqn_v3_graph_value_head
+reward_version:   throughput_fairness_pingpong_v3
+feature_profile:  ue_only
+prb_available:    false
+feature_dim:      11
+checkpoint_kind:  best_model
+git_commit:       9d66dd47d8a0d18989bc566eb624db42e92208b3
+episodes done:    300
+best_episode:     248
+best_score:       15.863471935147086
+```
+
+The final 20-seed evaluation passed all 11 scenario gates:
+
+| Scenario | Gate | SON avg | Random avg | A3 avg | SON P5 | SON ping-pong |
+|---|---:|---:|---:|---:|---:|---:|
+| coverage_hole | PASS | 4.971 | 4.197 | 4.971 | 2.396 | 0.000 |
+| dense_urban | PASS | 4.953 | 4.133 | 4.953 | 2.343 | 0.000 |
+| dharan_synthetic | PASS | 5.072 | 4.166 | 5.072 | 2.325 | 0.000 |
+| highway | PASS | 4.877 | 4.050 | 4.877 | 2.335 | 0.000 |
+| kathmandu_real | PASS | 4.704 | 3.720 | 4.707 | 2.172 | 0.000 |
+| overloaded_event | PASS | 5.131 | 5.808 | 5.136 | 2.607 | 0.000 |
+| pokhara_dense_peakhour | PASS | 4.135 | 1.526 | 4.131 | 1.693 | 0.000 |
+| real_pokhara | PASS | 4.978 | 3.924 | 4.977 | 2.354 | 0.001 |
+| sparse_rural | PASS | 2.933 | 2.453 | 2.934 | 1.198 | 0.000 |
+| suburban | PASS | 4.997 | 4.150 | 4.998 | 2.350 | 0.000 |
+| unknown_hex_grid | PASS | 4.933 | 4.109 | 4.935 | 2.308 | 0.000 |
+
+The headline result is that `son_gnn_dqn` is A3-competitive across training and
+held-out scenarios while maintaining near-zero ping-pong. It should not be claimed
+as universally throughput-dominant: in `overloaded_event`, `random_valid` achieves
+higher average throughput by spreading users randomly, while `son_gnn_dqn` remains
+within the acceptance gate and preserves handover stability.
+
+Generated run artifacts live under `results/runs/multiscenario_ue/`, which is
+ignored by git. The checkpoint and CSVs are intentionally local artifacts, not
+committed repository files.
+
+Results archived under `results/archive_prefix/pre_refactor_2026-05-09/` are
+diagnostic only and should not be cited as final results.
 
 ## Project Structure
 
