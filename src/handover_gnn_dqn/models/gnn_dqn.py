@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GATConv, GCNConv
 
 from ..env.simulator import CellularNetworkEnv, LTEConfig
 
@@ -40,6 +40,12 @@ class DQNConfig:
     epsilon_decay_episodes: int = 350
     dueling: bool = True
     double_dqn: bool = True
+    use_gat: bool = False
+    gat_heads: int = 4
+    n_step: int = 1
+    per_alpha: float = 0.6
+    per_beta_start: float = 0.4
+    per_beta_end: float = 1.0
 
 
 class ReplayBuffer:
@@ -68,8 +74,115 @@ class ReplayBuffer:
         self.items = deque(state.get("items", []), maxlen=capacity)
 
 
+class PrioritizedReplayBuffer:
+    """Proportional prioritized experience replay (PER).
+
+    Rare important transitions (handovers, outages, load-balance wins) get
+    replayed more often, dramatically improving sample efficiency.
+    """
+
+    def __init__(self, capacity: int, alpha: float = 0.6):
+        self.capacity = capacity
+        self.alpha = alpha
+        self.items: List[Transition] = []
+        self.priorities: np.ndarray = np.zeros(capacity, dtype=np.float64)
+        self.position = 0
+        self.size = 0
+        self._max_priority = 1.0
+
+    def __len__(self) -> int:
+        return self.size
+
+    def add(self, item: Transition) -> None:
+        if self.size < self.capacity:
+            self.items.append(item)
+        else:
+            self.items[self.position] = item
+        self.priorities[self.position] = self._max_priority ** self.alpha
+        self.position = (self.position + 1) % self.capacity
+        self.size = min(self.size + 1, self.capacity)
+
+    def sample(self, rng: np.random.Generator, batch_size: int, beta: float = 0.4
+               ) -> Tuple[List[Transition], np.ndarray, np.ndarray]:
+        priorities = self.priorities[:self.size]
+        probs = priorities / (priorities.sum() + 1e-10)
+        indices = rng.choice(self.size, size=batch_size, replace=False, p=probs)
+
+        # Importance sampling weights
+        weights = (self.size * probs[indices]) ** (-beta)
+        weights = weights / (weights.max() + 1e-10)
+
+        batch = [self.items[int(i)] for i in indices]
+        return batch, indices, weights.astype(np.float32)
+
+    def update_priorities(self, indices: np.ndarray, td_errors: np.ndarray) -> None:
+        for idx, td_err in zip(indices, td_errors):
+            priority = (abs(td_err) + 1e-6) ** self.alpha
+            self.priorities[int(idx)] = priority
+            self._max_priority = max(self._max_priority, priority)
+
+    def state_dict(self) -> dict:
+        return {
+            "capacity": self.capacity,
+            "items": self.items[:self.size],
+            "priorities": self.priorities[:self.size].tolist(),
+            "position": self.position,
+            "max_priority": self._max_priority,
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        self.capacity = int(state.get("capacity", self.capacity))
+        items = state.get("items", [])
+        self.items = list(items)
+        self.size = len(self.items)
+        self.priorities = np.zeros(self.capacity, dtype=np.float64)
+        prios = state.get("priorities", [])
+        self.priorities[:len(prios)] = prios
+        self.position = int(state.get("position", self.size % self.capacity))
+        self._max_priority = float(state.get("max_priority", 1.0))
+
+
+class NStepBuffer:
+    """Accumulates n-step returns for better credit assignment."""
+
+    def __init__(self, n: int, gamma: float):
+        self.n = n
+        self.gamma = gamma
+        self.buffer: Deque[Transition] = deque(maxlen=n)
+
+    def add(self, transition: Transition) -> Transition | None:
+        self.buffer.append(transition)
+        if len(self.buffer) < self.n:
+            return None
+        # Compute n-step return
+        state = self.buffer[0][0]
+        action = self.buffer[0][1]
+        n_step_reward = 0.0
+        for i, t in enumerate(self.buffer):
+            n_step_reward += (self.gamma ** i) * t[2]
+        last = self.buffer[-1]
+        return (state, action, n_step_reward, last[3], last[4], last[5])
+
+    def flush(self) -> List[Transition]:
+        """Flush remaining partial n-step transitions at episode end."""
+        results = []
+        while len(self.buffer) > 0:
+            state = self.buffer[0][0]
+            action = self.buffer[0][1]
+            n_step_reward = 0.0
+            for i, t in enumerate(self.buffer):
+                n_step_reward += (self.gamma ** i) * t[2]
+            last = self.buffer[-1]
+            results.append((state, action, n_step_reward, last[3], last[4], last[5]))
+            self.buffer.popleft()
+        return results
+
+    def reset(self) -> None:
+        self.buffer.clear()
+
+
 class GnnDQNAgent(nn.Module):
-    """3-layer GCN + Dueling Q-head for per-UE handover decisions."""
+    """3-layer GNN (GCN or GAT) + Dueling Q-head for per-UE handover decisions."""
 
     def __init__(self, num_cells: int, feature_dim: int, cfg: DQNConfig, seed: int = 0):
         super().__init__()
@@ -78,23 +191,35 @@ class GnnDQNAgent(nn.Module):
         self.feature_dim = feature_dim
         self.cfg = cfg
 
-        self.gcn1 = GCNConv(feature_dim, cfg.hidden_dim)
-        self.gcn2 = GCNConv(cfg.hidden_dim, cfg.hidden_dim)
-        self.gcn3 = GCNConv(cfg.hidden_dim, 64)
+        embed_dim = 64
+
+        if cfg.use_gat:
+            heads = cfg.gat_heads
+            self.conv1 = GATConv(feature_dim, cfg.hidden_dim // heads, heads=heads, concat=True)
+            self.conv2 = GATConv(cfg.hidden_dim, cfg.hidden_dim // heads, heads=heads, concat=True)
+            self.conv3 = GATConv(cfg.hidden_dim, embed_dim // heads, heads=heads, concat=True)
+        else:
+            self.conv1 = GCNConv(feature_dim, cfg.hidden_dim)
+            self.conv2 = GCNConv(cfg.hidden_dim, cfg.hidden_dim)
+            self.conv3 = GCNConv(cfg.hidden_dim, embed_dim)
+
+        self.layer_norm1 = nn.LayerNorm(cfg.hidden_dim)
+        self.layer_norm2 = nn.LayerNorm(cfg.hidden_dim)
+        self.layer_norm3 = nn.LayerNorm(embed_dim)
 
         if cfg.dueling:
             self.value_stream = nn.Sequential(
-                nn.Linear(64, 32),
+                nn.Linear(embed_dim, 64),
                 nn.ReLU(),
-                nn.Linear(32, 1),
+                nn.Linear(64, 1),
             )
             self.advantage_stream = nn.Sequential(
-                nn.Linear(64, 32),
+                nn.Linear(embed_dim, 64),
                 nn.ReLU(),
-                nn.Linear(32, 1),
+                nn.Linear(64, 1),
             )
         else:
-            self.q_head = nn.Linear(64, 1)
+            self.q_head = nn.Linear(embed_dim, 1)
 
         self.dropout = nn.Dropout(cfg.dropout)
 
@@ -117,11 +242,18 @@ class GnnDQNAgent(nn.Module):
         if (batch_size is None) != (nodes_per_graph is None):
             raise ValueError("batch_size and nodes_per_graph must be provided together")
 
-        h = F.relu(self.gcn1(x, edge_index, edge_weight))
-        h = self.dropout(h)
-        h = F.relu(self.gcn2(h, edge_index, edge_weight))
-        h = self.dropout(h)
-        h = F.relu(self.gcn3(h, edge_index, edge_weight))
+        if self.cfg.use_gat:
+            h = F.elu(self.layer_norm1(self.conv1(x, edge_index)))
+            h = self.dropout(h)
+            h = F.elu(self.layer_norm2(self.conv2(h, edge_index)))
+            h = self.dropout(h)
+            h = F.elu(self.layer_norm3(self.conv3(h, edge_index)))
+        else:
+            h = F.relu(self.layer_norm1(self.conv1(x, edge_index, edge_weight)))
+            h = self.dropout(h)
+            h = F.relu(self.layer_norm2(self.conv2(h, edge_index, edge_weight)))
+            h = self.dropout(h)
+            h = F.relu(self.layer_norm3(self.conv3(h, edge_index, edge_weight)))
 
         if self.cfg.dueling:
             advantage = self.advantage_stream(h).squeeze(-1)
@@ -198,20 +330,27 @@ def _train_step(
     edge_weight: torch.Tensor,
     optimizer: torch.optim.Optimizer,
     cfg: DQNConfig,
-) -> float:
+    importance_weights: np.ndarray | None = None,
+) -> Tuple[float, np.ndarray]:
+    """Returns (loss, td_errors) — td_errors used for PER priority updates."""
     batch_size = len(batch)
     num_cells = agent.num_cells
-    
+
     # Flatten states for a single GNN forward pass: (B*N, D)
     states_list = [torch.from_numpy(s).float() for s, *_ in batch]
     next_states_list = [torch.from_numpy(t[3]).float() for t in batch]
-    
+
     states = torch.cat(states_list, dim=0).to(DEVICE)
     next_states = torch.cat(next_states_list, dim=0).to(DEVICE)
-    
+
     actions = torch.tensor([t[1] for t in batch], dtype=torch.long, device=DEVICE)
     rewards = torch.tensor([t[2] for t in batch], dtype=torch.float, device=DEVICE)
     dones = torch.tensor([float(t[4]) for t in batch], dtype=torch.float, device=DEVICE)
+
+    if importance_weights is not None:
+        is_weights = torch.from_numpy(importance_weights).float().to(DEVICE)
+    else:
+        is_weights = torch.ones(batch_size, device=DEVICE)
 
     next_masks = []
     for t in batch:
@@ -224,7 +363,7 @@ def _train_step(
     # Replicate edge_index and edge_weight for the batch
     ei = edge_index.to(DEVICE)
     ew = edge_weight.to(DEVICE)
-    
+
     ei_batch = torch.cat([ei + i * num_cells for i in range(batch_size)], dim=1)
     ew_batch = ew.repeat(batch_size)
 
@@ -259,7 +398,8 @@ def _train_step(
             q_max = q_next_masked.max(dim=1).values
 
         q_max = torch.where(torch.isfinite(q_max), q_max, torch.zeros_like(q_max))
-        targets = rewards + cfg.gamma * q_max * (1.0 - dones)
+        gamma_n = cfg.gamma ** cfg.n_step
+        targets = rewards + gamma_n * q_max * (1.0 - dones)
     if agent_was_training:
         agent.train()
     if target_was_training:
@@ -275,14 +415,19 @@ def _train_step(
     )
     q_pred = q_pred_all.gather(1, actions.unsqueeze(1)).squeeze(1)
 
-    loss = F.smooth_l1_loss(q_pred, targets)
+    td_errors = (q_pred - targets).detach().cpu().numpy()
+
+    # Weighted Huber loss for PER
+    element_loss = F.smooth_l1_loss(q_pred, targets, reduction='none')
+    loss = (is_weights * element_loss).mean()
+
     if not torch.isfinite(loss):
         raise RuntimeError("Non-finite DQN loss encountered")
     optimizer.zero_grad()
     loss.backward()
     nn.utils.clip_grad_norm_(agent.parameters(), cfg.grad_clip)
     optimizer.step()
-    return loss.item()
+    return loss.item(), td_errors
 
 
 def train_gnn_dqn(
@@ -334,7 +479,10 @@ def train_gnn_dqn(
 
                 if len(replay) >= dqn_cfg.batch_size and decisions % dqn_cfg.train_every == 0:
                     batch = replay.sample(rng, dqn_cfg.batch_size)
-                    losses.append(_train_step(agent, target_net, batch, edge_index, edge_weight, optimizer, dqn_cfg))
+                    loss_val, _td_errors = _train_step(
+                        agent, target_net, batch, edge_index, edge_weight, optimizer, dqn_cfg
+                    )
+                    losses.append(loss_val)
                 if decisions % dqn_cfg.target_update_every == 0:
                     target_net.load_state_dict(agent.state_dict())
                 decisions += 1

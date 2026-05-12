@@ -14,36 +14,54 @@ from torch import nn
 
 from ..env import CellularNetworkEnv, LTEConfig
 from ..metrics import default_policy_factories, evaluate_policies, write_summary_csv
-from ..models import DQNConfig, GnnDQNAgent, ReplayBuffer
+from ..models import DQNConfig, GnnDQNAgent, NStepBuffer, PrioritizedReplayBuffer, ReplayBuffer
 from ..models.gnn_dqn import Transition, _train_step
 from ..topology import Scenario
 
-MODEL_VERSION = "gnn_dqn_v3_graph_value_head"
-REWARD_VERSION = "throughput_fairness_pingpong_v3"
+MODEL_VERSION = "gnn_dqn_v4_layernorm_per_nstep"
+REWARD_VERSION = "speed_aware_proactive_v4"
 
 
 class ScenarioReplayBuffer:
-    """Per-scenario replay buffers to keep graph topology and transitions aligned."""
+    """Per-scenario replay buffers with optional PER to keep graph topology aligned."""
 
-    def __init__(self, capacity_per_scenario: int):
+    def __init__(self, capacity_per_scenario: int, use_per: bool = False, per_alpha: float = 0.6):
         self.capacity_per_scenario = capacity_per_scenario
-        self.buffers: dict[str, ReplayBuffer] = {}
+        self.use_per = use_per
+        self.per_alpha = per_alpha
+        self.buffers: dict[str, ReplayBuffer | PrioritizedReplayBuffer] = {}
 
     def add(self, scenario_name: str, item: Transition) -> None:
         if scenario_name not in self.buffers:
-            self.buffers[scenario_name] = ReplayBuffer(self.capacity_per_scenario)
+            if self.use_per:
+                self.buffers[scenario_name] = PrioritizedReplayBuffer(
+                    self.capacity_per_scenario, alpha=self.per_alpha
+                )
+            else:
+                self.buffers[scenario_name] = ReplayBuffer(self.capacity_per_scenario)
         self.buffers[scenario_name].add(item)
 
     def can_sample(self, scenario_name: str, batch_size: int) -> bool:
         buf = self.buffers.get(scenario_name)
         return buf is not None and len(buf) >= batch_size
 
-    def sample(self, scenario_name: str, rng: np.random.Generator, batch_size: int) -> List[Transition]:
-        return self.buffers[scenario_name].sample(rng, batch_size)
+    def sample(self, scenario_name: str, rng: np.random.Generator, batch_size: int,
+               beta: float = 0.4):
+        buf = self.buffers[scenario_name]
+        if self.use_per and isinstance(buf, PrioritizedReplayBuffer):
+            return buf.sample(rng, batch_size, beta=beta)
+        return buf.sample(rng, batch_size), None, None
+
+    def update_priorities(self, scenario_name: str, indices: np.ndarray, td_errors: np.ndarray) -> None:
+        if self.use_per and scenario_name in self.buffers:
+            buf = self.buffers[scenario_name]
+            if isinstance(buf, PrioritizedReplayBuffer):
+                buf.update_priorities(indices, td_errors)
 
     def state_dict(self) -> dict:
         return {
             "capacity_per_scenario": self.capacity_per_scenario,
+            "use_per": self.use_per,
             "buffers": {name: buf.state_dict() for name, buf in self.buffers.items()},
         }
 
@@ -51,9 +69,14 @@ class ScenarioReplayBuffer:
         self.capacity_per_scenario = int(
             state.get("capacity_per_scenario", self.capacity_per_scenario)
         )
+        self.use_per = bool(state.get("use_per", self.use_per))
         self.buffers = {}
         for name, buf_state in state.get("buffers", {}).items():
-            buf = ReplayBuffer(int(buf_state.get("capacity", self.capacity_per_scenario)))
+            cap = int(buf_state.get("capacity", self.capacity_per_scenario))
+            if self.use_per:
+                buf = PrioritizedReplayBuffer(cap, alpha=self.per_alpha)
+            else:
+                buf = ReplayBuffer(cap)
             buf.load_state_dict(buf_state)
             self.buffers[name] = buf
 
@@ -79,17 +102,20 @@ def make_env_from_scenario(scenario: Scenario, feature_mode: str = "ue_only", pr
 def training_validation_score(metrics: dict[str, float]) -> float:
     """Single scalar used only for best-checkpoint selection.
 
-    Weights tuned to select policies that beat A3/TTT: high throughput,
-    strong load fairness, low handover rate (A3 does ~12/k decisions).
+    Weights tuned to select policies that decisively beat A3/TTT:
+    - Heavy P5 weight (protects worst-case users — Nepal's biggest complaint)
+    - Load fairness (prevents cell congestion hotspots)
+    - Low pingpong (stability matters for voice calls)
+    - Moderate HO rate penalty (don't over-penalize necessary highway HOs)
     """
     return float(
-        2.0 * metrics.get("p5_ue_throughput_mbps", 0.0)
-        + 1.0 * metrics.get("avg_ue_throughput_mbps", 0.0)
-        + 1.2 * metrics.get("jain_load_fairness", 0.0)
-        - 0.5 * metrics.get("load_std", 0.0)
-        - 2.0 * metrics.get("outage_rate", 0.0)
-        - 1.5 * metrics.get("pingpong_rate", 0.0)
-        - 0.005 * metrics.get("handovers_per_1000_decisions", 0.0)
+        2.5 * metrics.get("p5_ue_throughput_mbps", 0.0)
+        + 1.5 * metrics.get("avg_ue_throughput_mbps", 0.0)
+        + 1.5 * metrics.get("jain_load_fairness", 0.0)
+        - 0.8 * metrics.get("load_std", 0.0)
+        - 3.0 * metrics.get("outage_rate", 0.0)
+        - 2.0 * metrics.get("pingpong_rate", 0.0)
+        - 0.003 * metrics.get("handovers_per_1000_decisions", 0.0)
     )
 
 
@@ -117,7 +143,8 @@ def train_multi_scenario(
     rng = np.random.default_rng(seed)
     history: list[dict] = []
     per_scenario_cap = max(dqn_cfg.replay_capacity // max(len(scenarios), 1), dqn_cfg.batch_size)
-    replay = ScenarioReplayBuffer(per_scenario_cap)
+    use_per = dqn_cfg.per_alpha > 0.0
+    replay = ScenarioReplayBuffer(per_scenario_cap, use_per=use_per, per_alpha=dqn_cfg.per_alpha)
     decisions = 0
     start_episode = 0
 
@@ -202,6 +229,16 @@ def train_multi_scenario(
         frac = min(episode / max(dqn_cfg.epsilon_decay_episodes, 1), 1.0)
         epsilon = dqn_cfg.epsilon_start + frac * (dqn_cfg.epsilon_end - dqn_cfg.epsilon_start)
 
+        # PER beta annealing: starts low, reaches 1.0 by end of training
+        beta_frac = min(episode / max(total_episodes - 1, 1), 1.0)
+        per_beta = dqn_cfg.per_beta_start + beta_frac * (dqn_cfg.per_beta_end - dqn_cfg.per_beta_start)
+
+        # N-step buffers per UE for this episode
+        n_step_buffers: dict[int, NStepBuffer] = {}
+        if dqn_cfg.n_step > 1:
+            for ue in range(env.cfg.num_ues):
+                n_step_buffers[ue] = NStepBuffer(dqn_cfg.n_step, dqn_cfg.gamma)
+
         for _step in range(steps_per_episode):
             env.advance_mobility()
             for ue_idx in rng.permutation(env.cfg.num_ues):
@@ -228,18 +265,40 @@ def train_multi_scenario(
                 next_state, reward, done, _info = env.step_user_action(ue_idx, action)
                 next_state_padded = pad_state(next_state)
                 next_valid = pad_mask(env.valid_actions(ue_idx))
-                replay.add(scenario.name, (state, action, reward, next_state_padded, done, next_valid))
                 episode_reward += reward
 
+                transition = (state, action, reward, next_state_padded, done, next_valid)
+                if dqn_cfg.n_step > 1:
+                    nstep_t = n_step_buffers[ue_idx].add(transition)
+                    if nstep_t is not None:
+                        replay.add(scenario.name, nstep_t)
+                else:
+                    replay.add(scenario.name, transition)
+
                 if replay.can_sample(scenario.name, dqn_cfg.batch_size) and decisions % dqn_cfg.train_every == 0:
-                    batch = replay.sample(scenario.name, rng, dqn_cfg.batch_size)
-                    losses.append(_train_step(agent, target_net, batch, edge_index, edge_weight, optimizer, dqn_cfg))
+                    batch, per_indices, per_weights = replay.sample(
+                        scenario.name, rng, dqn_cfg.batch_size, beta=per_beta
+                    )
+                    loss_val, td_errors = _train_step(
+                        agent, target_net, batch, edge_index, edge_weight,
+                        optimizer, dqn_cfg,
+                        importance_weights=per_weights,
+                    )
+                    losses.append(loss_val)
+                    if per_indices is not None:
+                        replay.update_priorities(scenario.name, per_indices, td_errors)
                     scheduler.step()
                     if dqn_cfg.tau > 0:
                         _soft_update(target_net, agent, dqn_cfg.tau)
                 if dqn_cfg.tau == 0 and decisions % dqn_cfg.target_update_every == 0:
                     target_net.load_state_dict(agent.state_dict())
                 decisions += 1
+
+        # Flush remaining n-step transitions at episode end
+        if dqn_cfg.n_step > 1:
+            for ue in range(env.cfg.num_ues):
+                for t in n_step_buffers[ue].flush():
+                    replay.add(scenario.name, t)
 
         metrics = env.metrics()
         episode_decisions = max(steps_per_episode * env.cfg.num_ues, 1)

@@ -100,6 +100,25 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
         shadow_sigma_db=7.0,
     ))
 
+    # 2b. HIGHWAY FAST (Mugling-Narayanghat, very fast mobility + voice calls)
+    # Targets the "call drop at highway speed" problem. Higher speed range
+    # forces the model to learn proactive handover before signal death.
+    highway_fast_pos = _highway_layout(12, isd_m=700)
+    scenarios.append(Scenario(
+        name="highway_fast",
+        num_cells=12,
+        num_ues=60,  # 5 UEs/cell
+        area_m=get_area_size(highway_fast_pos),
+        cell_positions=highway_fast_pos,
+        min_speed_mps=22.0,   # 80 km/h minimum
+        max_speed_mps=33.0,   # up to 120 km/h
+        description="Highway fast: 700m ISD, 80-120 km/h, proactive HO required",
+        mobility_model="highway",
+        shadow_sigma_db=7.0,
+        min_demand_mbps=1.5,  # voice/video call minimum
+        max_demand_mbps=6.0,
+    ))
+
     # 3. SUBURBAN (Chipledhunga, medium density)
     suburban_pos = _hex_grid(15, isd_m=600)
     scenarios.append(Scenario(
@@ -165,8 +184,8 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
     ))
 
     # 7. POKHARA DENSE PEAK HOUR (Track-B stress test on real positions)
-    # 30 active UEs/cell ≈ realistic peak-hour simultaneous data users in
-    # Lakeside/Mahendrapul. Higher demand (video-dominant traffic).
+    # 15 active UEs/cell for training speed (GNN generalizes to any count).
+    # Higher demand (video-dominant traffic) simulates congestion pressure.
     try:
         pokhara_peak_pos = np.load("data/raw/opencellid/pokhara_dense_20.npy")
     except FileNotFoundError:
@@ -174,12 +193,12 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
     scenarios.append(Scenario(
         name="pokhara_dense_peakhour",
         num_cells=len(pokhara_peak_pos),
-        num_ues=len(pokhara_peak_pos) * 30,
+        num_ues=len(pokhara_peak_pos) * 15,
         area_m=get_area_size(pokhara_peak_pos),
         cell_positions=pokhara_peak_pos,
         min_speed_mps=0.5,
         max_speed_mps=14.0,
-        description="Pokhara peak hour: real OpenCellID positions, 30 UEs/cell, video-heavy demand",
+        description="Pokhara peak hour: real OpenCellID positions, 15 UEs/cell, video-heavy demand",
         mobility_model="random",
         shadow_sigma_db=7.0,
         min_demand_mbps=3.0,

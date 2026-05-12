@@ -85,7 +85,8 @@ def test_ttt_cooldown_only_starts_when_ttt_changes() -> None:
     )
     controller.reset(env)
     assert controller.ttt_steps is not None
-    controller.ttt_steps[:] = controller.config.base_ttt_steps
+    # Set to min_ttt_steps so there's no room to decrease
+    controller.ttt_steps[:] = controller.config.min_ttt_steps
 
     env.step_index = 1
     env.total_handovers = 10
@@ -96,5 +97,5 @@ def test_ttt_cooldown_only_starts_when_ttt_changes() -> None:
     env.step_index = 2
     env.pingpong_handovers = 10
     controller.update(env)
-    assert controller.ttt(0, 1) == controller.config.base_ttt_steps + 1
+    assert controller.ttt(0, 1) == controller.config.min_ttt_steps + 1
     assert controller._last_ttt_change_step == 2

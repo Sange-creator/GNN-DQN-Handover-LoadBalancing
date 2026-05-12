@@ -1,0 +1,53 @@
+{
+  "run_name": "multiscenario_ue_v2",
+  "out_dir": "results/runs/multiscenario_ue_v2",
+  "feature_mode": "ue_only",
+  "prb_available": false,
+  "seed": 42,
+  "episodes": 480,
+  "steps_per_episode": 120,
+  "eval_seeds": 20,
+  "checkpoint_every_episodes": 60,
+  "train_scenarios": [
+    "dense_urban",
+    "highway",
+    "highway_fast",
+    "suburban",
+    "sparse_rural",
+    "overloaded_event",
+    "real_pokhara",
+    "pokhara_dense_peakhour"
+  ],
+  "test_scenarios": [
+    "kathmandu_real",
+    "dharan_synthetic",
+    "unknown_hex_grid",
+    "coverage_hole"
+  ],
+  "dqn": {
+    "hidden_dim": 256,
+    "num_gcn_layers": 3,
+    "dropout": 0.08,
+    "gamma": 0.97,
+    "learning_rate": 0.0003,
+    "batch_size": 128,
+    "replay_capacity": 400000,
+    "train_every": 4,
+    "target_update_every": 1000,
+    "tau": 0.005,
+    "grad_clip": 1.0,
+    "lr_min": 5e-6,
+    "weight_decay": 1e-5,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.02,
+    "epsilon_decay_episodes": 380,
+    "dueling": true,
+    "double_dqn": true,
+    "use_gat": false,
+    "gat_heads": 4,
+    "n_step": 3,
+    "per_alpha": 0.6,
+    "per_beta_start": 0.4,
+    "per_beta_end": 1.0
+  }
+}

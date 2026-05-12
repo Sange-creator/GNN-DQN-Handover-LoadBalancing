@@ -11,23 +11,29 @@ from ..env import CellularNetworkEnv
 
 @dataclass(frozen=True)
 class SONConfig:
-    """Safety-bounded SON parameter update policy."""
+    """Safety-bounded SON parameter update policy.
 
-    update_interval_steps: int = 15
+    v2: Faster adaptation (1.0 dB steps, 12 updates/cycle, lower threshold)
+    to exploit GNN-DQN's per-UE knowledge more aggressively while maintaining
+    safety bounds.
+    """
+
+    update_interval_steps: int = 10
     cio_min_db: float = -6.0
     cio_max_db: float = 6.0
-    max_cio_step_db: float = 0.5
+    max_cio_step_db: float = 1.0
     base_a3_offset_db: float = 3.0
     base_ttt_steps: int = 3
     max_ttt_steps: int = 8
-    preference_threshold: float = 0.18
-    load_proxy_overload_threshold: float = 0.85
-    max_updates_per_cycle: int = 8
-    rollback_throughput_drop_frac: float = 0.15
-    rollback_pingpong_increase_frac: float = 0.30
+    min_ttt_steps: int = 2
+    preference_threshold: float = 0.12
+    load_proxy_overload_threshold: float = 0.80
+    max_updates_per_cycle: int = 12
+    rollback_throughput_drop_frac: float = 0.12
+    rollback_pingpong_increase_frac: float = 0.25
     rollback_pingpong_floor: float = 0.05
     ttt_decrease_threshold: float = 0.10
-    ttt_cooldown_steps: int = 30
+    ttt_cooldown_steps: int = 20
     # Where the SON gets its load signal from. "rsrq_proxy" is what a
     # phone-only deployment can compute from UE measurements; "true_prb"
     # is what a real eNB / near-RT RIC reads from PM counters. The trained
@@ -162,13 +168,13 @@ class SONController:
         pingpong_rate = env.pingpong_handovers / max(env.total_handovers, 1)
         cooldown_elapsed = env.step_index - self._last_ttt_change_step >= self.config.ttt_cooldown_steps
         if self.ttt_steps is not None and cooldown_elapsed:
-            if pingpong_rate > 0.30:
+            if pingpong_rate > 0.25:
                 next_ttt = np.minimum(self.ttt_steps + 1, self.config.max_ttt_steps)
                 if np.any(next_ttt != self.ttt_steps):
                     self.ttt_steps[:] = next_ttt
                     self._last_ttt_change_step = env.step_index
             elif pingpong_rate < self.config.ttt_decrease_threshold:
-                next_ttt = np.maximum(self.ttt_steps - 1, self.config.base_ttt_steps)
+                next_ttt = np.maximum(self.ttt_steps - 1, self.config.min_ttt_steps)
                 if np.any(next_ttt != self.ttt_steps):
                     self.ttt_steps[:] = next_ttt
                     self._last_ttt_change_step = env.step_index
