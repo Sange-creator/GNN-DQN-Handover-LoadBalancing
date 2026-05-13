@@ -192,6 +192,9 @@ def build_adjacency_from_positions(
     both internally.
     """
     n = len(positions)
+    if n <= 1:
+        return np.zeros((n, n), dtype=float)
+
     d = np.linalg.norm(positions[:, None, :] - positions[None, :, :], axis=2)
     scale = max(np.median(d[d > 0]) / 2.0, 1.0)
     w = np.exp(-d / scale)

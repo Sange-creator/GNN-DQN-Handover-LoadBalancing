@@ -1,0 +1,34 @@
+{
+  "run_name": "diagnostic_canonical",
+  "out_dir": "results/runs/diagnostic_canonical",
+  "feature_mode": "ue_only",
+  "prb_available": false,
+  "seed": 42,
+  "episodes": 80,
+  "steps_per_episode": 60,
+  "behavioral_clone_episodes": 8,
+  "flat_dqn_episodes": 40,
+  "eval_seeds": 3,
+  "checkpoint_every_episodes": 20,
+  "checkpoint_include_replay": true,
+  "validation_scenarios": ["highway_fast", "overloaded_event"],
+  "validation_seeds": 3,
+  "validate_every_episodes": 20,
+  "validation_steps": 40,
+  "validation_ue_cap": 40,
+  "validation_steps_override": 25,
+  "scenario_sampling_weights": {
+    "dense_urban": 1.0, "highway": 1.2, "highway_fast": 1.5,
+    "suburban": 0.8, "overloaded_event": 1.5
+  },
+  "train_scenarios": ["dense_urban", "highway", "highway_fast", "suburban", "overloaded_event"],
+  "test_scenarios": ["kathmandu_real"],
+  "dqn": {
+    "hidden_dim": 256, "dropout": 0.08, "gamma": 0.97,
+    "learning_rate": 0.0003, "batch_size": 128, "replay_capacity": 50000,
+    "train_every": 4, "target_update_every": 500, "tau": 0.005, "grad_clip": 1.0,
+    "lr_min": 5e-6, "weight_decay": 1e-5, "epsilon_start": 1.0, "epsilon_end": 0.05,
+    "epsilon_decay_episodes": 60, "dueling": true, "double_dqn": true,
+    "n_step": 3, "per_alpha": 0.6, "per_beta_start": 0.4, "per_beta_end": 1.0
+  }
+}

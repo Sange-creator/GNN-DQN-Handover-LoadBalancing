@@ -1,0 +1,37 @@
+{
+  "run_name": "smoke_validation_gate",
+  "out_dir": "results/runs/smoke_validation_gate",
+  "feature_mode": "ue_only",
+  "prb_available": false,
+  "seed": 42,
+  "episodes": 8,
+  "steps_per_episode": 20,
+  "eval_seeds": 0,
+  "checkpoint_every_episodes": 4,
+  "checkpoint_include_replay": true,
+  "validation_scenarios": [
+    "suburban"
+  ],
+  "validation_seeds": 2,
+  "validate_every_episodes": 4,
+  "validation_steps": 10,
+  "train_scenarios": [
+    "suburban",
+    "sparse_rural"
+  ],
+  "test_scenarios": [
+    "unknown_hex_grid"
+  ],
+  "dqn": {
+    "hidden_dim": 32,
+    "gamma": 0.97,
+    "learning_rate": 0.0003,
+    "batch_size": 32,
+    "replay_capacity": 4000,
+    "train_every": 4,
+    "target_update_every": 200,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.05,
+    "epsilon_decay_episodes": 6
+  }
+}

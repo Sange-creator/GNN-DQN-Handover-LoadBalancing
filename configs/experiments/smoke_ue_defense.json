@@ -1,0 +1,85 @@
+{
+  "run_name": "smoke_ue_defense",
+  "out_dir": "results/runs/smoke_ue_defense",
+  "feature_mode": "ue_only",
+  "prb_available": false,
+  "seed": 42,
+  "episodes": 8,
+  "steps_per_episode": 20,
+  "steps_per_episode_curriculum": {
+    "phase1_episodes": 3,
+    "phase1_steps": 10,
+    "phase2_episodes": 6,
+    "phase2_steps": 15,
+    "phase3_steps": 20
+  },
+  "behavioral_clone_episodes": 2,
+  "eval_seeds": 0,
+  "log_every_episodes": 1,
+  "checkpoint_every_episodes": 4,
+  "checkpoint_include_replay": true,
+  "validation_scenarios": [
+    "highway_fast",
+    "overloaded_event"
+  ],
+  "validation_seeds": 2,
+  "validate_every_episodes": 4,
+  "validation_steps": 10,
+  "validation_ue_cap": 24,
+  "validation_steps_override": 8,
+  "scenario_sampling_weights": {
+    "dense_urban": 1.0,
+    "highway_fast": 1.7,
+    "overloaded_event": 1.6
+  },
+  "training_ue_caps": {
+    "dense_urban": 40,
+    "highway_fast": 30,
+    "overloaded_event": 40
+  },
+  "son_config": {
+    "update_interval_steps": 5,
+    "max_cio_step_db": 0.75,
+    "base_a3_offset_db": 2.5,
+    "base_ttt_steps": 2,
+    "max_ttt_steps": 6,
+    "min_ttt_steps": 1,
+    "preference_threshold": 0.08,
+    "load_proxy_overload_threshold": 0.82,
+    "max_updates_per_cycle": 16,
+    "rollback_throughput_drop_frac": 0.08,
+    "rollback_pingpong_increase_frac": 0.20,
+    "load_signal": "rsrq_proxy"
+  },
+  "train_scenarios": [
+    "dense_urban",
+    "highway_fast",
+    "overloaded_event"
+  ],
+  "test_scenarios": [
+    "kathmandu_real"
+  ],
+  "dqn": {
+    "hidden_dim": 64,
+    "dropout": 0.08,
+    "gamma": 0.97,
+    "learning_rate": 0.0003,
+    "batch_size": 64,
+    "replay_capacity": 6000,
+    "train_every": 4,
+    "target_update_every": 200,
+    "tau": 0.005,
+    "grad_clip": 1.0,
+    "lr_min": 5e-6,
+    "weight_decay": 1e-5,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.05,
+    "epsilon_decay_episodes": 6,
+    "dueling": true,
+    "double_dqn": true,
+    "n_step": 3,
+    "per_alpha": 0.6,
+    "per_beta_start": 0.4,
+    "per_beta_end": 1.0
+  }
+}

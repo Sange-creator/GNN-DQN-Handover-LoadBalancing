@@ -1,0 +1,26 @@
+[
+  {
+    "metric": "throughput_mbps",
+    "ks_stat": 1.0,
+    "p_value": 0.0,
+    "n_sim": 500,
+    "n_ns3": 1550,
+    "significant_divergence": true
+  },
+  {
+    "metric": "rsrp_dbm",
+    "ks_stat": 0.073576,
+    "p_value": 0.0,
+    "n_sim": 3500,
+    "n_ns3": 10850,
+    "significant_divergence": true
+  },
+  {
+    "metric": "cell_load",
+    "ks_stat": 0.571429,
+    "p_value": 0.0,
+    "n_sim": 140,
+    "n_ns3": 10850,
+    "significant_divergence": true
+  }
+]

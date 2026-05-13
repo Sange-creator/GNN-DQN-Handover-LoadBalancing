@@ -3,14 +3,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
-from dataclasses import fields
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from handover_gnn_dqn.models import DQNConfig
 from handover_gnn_dqn.rl import (
     load_checkpoint_payload,
     make_env_from_scenario,
@@ -19,18 +18,24 @@ from handover_gnn_dqn.rl import (
     validate_checkpoint_metadata,
     write_history,
 )
-from handover_gnn_dqn.rl.training import evaluate_and_write
-from handover_gnn_dqn.topology import Scenario, get_test_scenarios, get_training_scenarios
+from handover_gnn_dqn.rl.training import (
+    dqn_config_from_dict,
+    evaluate_and_write,
+    son_config_from_dict,
+    son_config_to_dict,
+    train_flat_multi_scenario,
+)
+from handover_gnn_dqn.topology import (
+    Scenario,
+    get_stress_scenarios,
+    get_test_scenarios,
+    get_training_scenarios,
+)
 
 
 def load_config(path: Path) -> dict:
     with path.open() as f:
         return json.load(f)
-
-
-def dqn_config(values: dict) -> DQNConfig:
-    valid = {f.name for f in fields(DQNConfig)}
-    return DQNConfig(**{k: v for k, v in values.items() if k in valid})
 
 
 def select_scenarios(all_scenarios: list[Scenario], names: list[str] | None) -> list[Scenario]:
@@ -76,9 +81,55 @@ def main() -> None:
     steps = int(cfg.get("steps_per_episode", 40))
     eval_seeds = int(cfg.get("eval_seeds", 0))
 
-    train_scenarios = select_scenarios(get_training_scenarios(seed=seed), cfg.get("train_scenarios"))
-    test_scenarios = select_scenarios(get_test_scenarios(seed=seed + 57), cfg.get("test_scenarios"))
-    dqn_cfg = dqn_config(cfg.get("dqn", {}))
+    base_train_scenarios = get_training_scenarios(seed=seed)
+    base_test_scenarios = get_test_scenarios(seed=seed + 57)
+    base_stress_scenarios = get_stress_scenarios(seed=seed + 137)
+    # Stress scenarios are normally evaluation-only, but time-critical defense
+    # runs may include capped stress variants in training. The evaluation still
+    # uses disjoint seeds; do not claim scenario-family holdout when configured.
+    train_scenarios = select_scenarios(base_train_scenarios + base_stress_scenarios, cfg.get("train_scenarios"))
+    test_scenarios = select_scenarios(base_test_scenarios + base_stress_scenarios, cfg.get("test_scenarios"))
+    dqn_cfg = dqn_config_from_dict(cfg.get("dqn", {}))
+
+    # Validation pass config (held-out, epsilon=0). Validation scenarios may be a subset
+    # of training scenarios or held-out test scenarios; either is acceptable as long as
+    # the seed list is disjoint from training seeds.
+    val_names = cfg.get("validation_scenarios")
+    if val_names:
+        # Allow validation scenarios to be drawn from either training or test pool
+        all_known = {
+            s.name: s
+            for s in (train_scenarios + test_scenarios + base_train_scenarios + base_test_scenarios + base_stress_scenarios)
+        }
+        unknown = [n for n in val_names if n not in all_known]
+        if unknown:
+            raise ValueError(f"Unknown validation_scenarios: {unknown}")
+        validation_scenarios = [all_known[n] for n in val_names]
+    else:
+        validation_scenarios = []
+    n_val_seeds = int(cfg.get("validation_seeds", 0))
+    validate_every_episodes = int(cfg.get("validate_every_episodes", 0))
+    validation_steps = int(cfg.get("validation_steps", 0))
+    # Validation seeds drawn from a disjoint range so they never overlap with training
+    validation_seed_list = (
+        [seed + 50_000 + i * 71 for i in range(n_val_seeds)] if n_val_seeds > 0 else []
+    )
+    # §9 new config fields
+    validation_ue_cap = cfg.get("validation_ue_cap")
+    validation_steps_override = cfg.get("validation_steps_override")
+    skip_validation_epsilon_above = cfg.get("skip_validation_epsilon_above")
+    early_stopping_min_episodes = int(cfg.get("early_stopping_min_episodes", 0))
+    early_stopping_patience = int(cfg.get("early_stopping_patience", 0))
+    early_stopping_min_delta = float(cfg.get("early_stopping_min_delta", 0.0))
+    scenario_sampling_weights = cfg.get("scenario_sampling_weights")
+    behavioral_clone_episodes = int(cfg.get("behavioral_clone_episodes", 0))
+    flat_dqn_episodes = int(cfg.get("flat_dqn_episodes", 0))
+    log_every_episodes = cfg.get("log_every_episodes")
+    steps_per_episode_curriculum = cfg.get("steps_per_episode_curriculum")
+    training_ue_caps = cfg.get("training_ue_caps")
+    son_cfg = son_config_from_dict(cfg.get("son_config"))
+    cfg["son_config"] = son_config_to_dict(son_cfg)
+
     sample_env = make_env_from_scenario(train_scenarios[0], feature_mode=feature_mode, prb_available=prb_available)
     resume_payload = None
     if args.resume is not None:
@@ -101,6 +152,25 @@ def main() -> None:
                 f"{saved_scenarios!r} != {requested_scenarios!r}"
             )
 
+        # Warn if resume checkpoint omits replay buffer — biases first thousands of grad steps
+        # to whichever scenario is sampled first after restart. Tag metadata so downstream tools
+        # (summarize_evaluation, generate_figures) can flag the run as exploratory.
+        has_replay = resume_payload.get("replay_state") is not None
+        if has_replay:
+            cfg["resume_mode"] = "warm_start_with_replay"
+        else:
+            cfg["resume_mode"] = "warm_start_no_replay"
+            print("=" * 72, file=sys.stderr)
+            print("WARNING: resume checkpoint does NOT contain replay buffer.", file=sys.stderr)
+            print(f"         Source: {args.resume}", file=sys.stderr)
+            print("         Network state restored, replay buffer is empty.", file=sys.stderr)
+            print("         The next several thousand gradient steps will be biased toward", file=sys.stderr)
+            print("         the first scenario sampled after resume. Results from this run", file=sys.stderr)
+            print("         must be treated as EXPLORATORY and not cited as final evidence.", file=sys.stderr)
+            print("         To do a clean resume: re-run with 'checkpoint_include_replay': true", file=sys.stderr)
+            print("         in the config, then resume from a checkpoint saved with that flag.", file=sys.stderr)
+            print("=" * 72, file=sys.stderr)
+
     print(f"=== {run_name} ===")
     print(f"Feature profile: {feature_mode} (prb_available={prb_available})")
     print(f"Training scenarios: {[s.name for s in train_scenarios]}")
@@ -121,10 +191,53 @@ def main() -> None:
         checkpoint_include_replay=bool(cfg.get("checkpoint_include_replay", False)),
         checkpoint_config=cfg,
         cwd=ROOT,
+        validation_scenarios=validation_scenarios,
+        validation_seeds=validation_seed_list,
+        validate_every_episodes=validate_every_episodes,
+        validation_steps=validation_steps,
+        validation_ue_cap=validation_ue_cap,
+        validation_steps_override=validation_steps_override,
+        skip_validation_epsilon_above=skip_validation_epsilon_above,
+        early_stopping_min_episodes=early_stopping_min_episodes,
+        early_stopping_patience=early_stopping_patience,
+        early_stopping_min_delta=early_stopping_min_delta,
+        scenario_sampling_weights=scenario_sampling_weights,
+        son_config=son_cfg,
+        behavioral_clone_episodes=behavioral_clone_episodes,
+        log_every_episodes=(
+            int(log_every_episodes) if log_every_episodes is not None else None
+        ),
+        steps_per_episode_curriculum=steps_per_episode_curriculum,
+        scenario_ue_caps=training_ue_caps,
     )
 
-    best_row = max(history, key=lambda row: row.get("validation_score", float("-inf"))) if history else {}
+    # Prefer the honest held-out validation score for best-row selection.
+    # Fall back to training-metric score for configs without validation.
+    validation_was_used = validation_scenarios and validate_every_episodes > 0
+    score_key = "val_holdout_validation_score" if validation_was_used else "validation_score"
+    if validation_was_used:
+        min_select_episode = max(6, episodes // 10 + 1)
+        rows_with_score = [
+            r for r in history
+            if score_key in r and int(r.get("episode", 0)) >= min_select_episode
+        ]
+    else:
+        rows_with_score = history
+    best_row = (
+        max(
+            rows_with_score,
+            key=lambda row: (
+                row.get(score_key, float("-inf")),
+                int(row.get("episode", 0)),
+            ),
+        )
+        if rows_with_score
+        else (history[-1] if history else {})
+    )
     checkpoint = out_dir / "checkpoints" / "gnn_dqn.pt"
+    best_score_for_metadata = float(
+        best_row.get(score_key, best_row.get("validation_score", 0.0))
+    )
     save_checkpoint(
         agent,
         checkpoint,
@@ -135,15 +248,45 @@ def main() -> None:
         history=history,
         cwd=ROOT,
         training_state={
-            "episode_completed": len(history),
+            "episode_completed": int(best_row.get("episode", episodes)),
+            "history_rows": len(history),
+            "behavioral_clone_episodes": behavioral_clone_episodes,
             "best_episode": int(best_row.get("episode", 0.0)),
-            "best_score": float(best_row.get("validation_score", 0.0)),
+            "best_score": best_score_for_metadata,
+            "best_score_source": score_key,
         },
         checkpoint_kind="best_model",
     )
+    best_pt = out_dir / "checkpoints" / "best.pt"
+    shutil.copy2(checkpoint, best_pt)
     write_history(history, out_dir / "history.json")
     (out_dir / "config.json").write_text(json.dumps(cfg, indent=2))
-    print(f"Saved checkpoint: {checkpoint}")
+    print(f"Saved checkpoint: {checkpoint} (also {best_pt})")
+    print(
+        f"Best episode: {int(best_row.get('episode', 0))} "
+        f"({score_key}={best_score_for_metadata:+.3f})"
+    )
+
+    # --- Flat-DQN ablation (no GNN, same replay/scenarios) ---
+    flat_agent = None
+    if flat_dqn_episodes > 0:
+        print(f"\n=== Flat-DQN ablation ({flat_dqn_episodes} episodes) ===")
+        flat_agent, flat_history, _ = train_flat_multi_scenario(
+            train_scenarios,
+            dqn_cfg,
+            total_episodes=flat_dqn_episodes,
+            steps_per_episode=steps,
+            feature_mode=feature_mode,
+            prb_available=prb_available,
+            seed=seed + 7000,
+            verbose=True,
+            scenario_sampling_weights=scenario_sampling_weights,
+        )
+        flat_ckpt = out_dir / "checkpoints" / "flat_dqn.pt"
+        flat_ckpt.parent.mkdir(parents=True, exist_ok=True)
+        import torch as _torch
+        _torch.save({"state_dict": flat_agent.state_dict(), "history": flat_history}, flat_ckpt)
+        print(f"Saved flat-DQN checkpoint: {flat_ckpt}")
 
     if eval_seeds > 0:
         seeds = [seed + 10_000 + i * 37 for i in range(eval_seeds)]
@@ -156,6 +299,8 @@ def main() -> None:
             prb_available=prb_available,
             steps=steps,
             seeds=seeds,
+            flat_agent=flat_agent,
+            son_config=son_cfg,
         )
         print(f"Wrote evaluation CSVs: {eval_dir}")
 

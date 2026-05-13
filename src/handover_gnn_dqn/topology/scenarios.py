@@ -290,3 +290,100 @@ def get_test_scenarios(seed: int = 99) -> List[Scenario]:
     ))
 
     return scenarios
+
+
+def get_stress_scenarios(seed: int = 137) -> List[Scenario]:
+    """Get stress evaluation scenarios for *evaluation only* (model is NOT trained on these).
+
+    The training scenarios use 5-15 UEs/cell, which keeps cell utilization at 30-80%.
+    At that load level, the demand-capped throughput model makes most handover policies
+    look identical because cells aren't actually congested.
+
+    These stress scenarios push 20-30 UEs/cell with higher per-UE demand, driving
+    aggregate demand to 1.5-1.7× cell capacity. That's the regime where load-aware
+    handover decisions actually matter, and where son_gnn_dqn should differentiate
+    from strongest_rsrp and a3_ttt.
+
+    Use these for the headline "congestion stress" results table in the thesis.
+    """
+    scenarios: List[Scenario] = []
+
+    # S1. DENSE URBAN STRESS — 20 cells × 20 UEs = 400 UEs, demand 4-20 Mbps
+    # Aggregate per-cell demand: 20 × 12 = 240 Mbps → 1.6× cell capacity (150 Mbps)
+    dense_pos = _hex_grid(20, isd_m=300)
+    scenarios.append(Scenario(
+        name="stress_dense_urban",
+        num_cells=20,
+        num_ues=400,
+        area_m=get_area_size(dense_pos),
+        cell_positions=dense_pos,
+        min_speed_mps=0.5,
+        max_speed_mps=15.0,
+        description="Stress: dense urban with 20 UEs/cell, 1.6× capacity demand",
+        mobility_model="random",
+        shadow_sigma_db=6.0,
+        min_demand_mbps=4.0,
+        max_demand_mbps=20.0,
+    ))
+
+    # S2. OVERLOAD EVENT STRESS — 12 cells × 25 UEs = 300 UEs, demand 3-17 Mbps
+    # Aggregate per-cell demand: 25 × 10 = 250 Mbps → 1.67× cell capacity
+    event_pos = _hex_grid(12, isd_m=400)
+    scenarios.append(Scenario(
+        name="stress_overload_event",
+        num_cells=12,
+        num_ues=300,
+        area_m=get_area_size(event_pos),
+        cell_positions=event_pos,
+        min_speed_mps=0.0,
+        max_speed_mps=5.0,
+        description="Stress: stadium/festival 25 UEs/cell, 1.67× capacity demand",
+        mobility_model="event",
+        shadow_sigma_db=6.0,
+        min_demand_mbps=3.0,
+        max_demand_mbps=17.0,
+    ))
+
+    # S3. POKHARA PEAK HOUR STRESS — real positions, 30 UEs/cell, demand 3-13 Mbps
+    # Aggregate per-cell demand: 30 × 8 = 240 Mbps → 1.6× cell capacity
+    # Higher UE count than training (15/cell) tests generalization to load density.
+    try:
+        pokhara_pos = np.load("data/raw/opencellid/pokhara_dense_20.npy")
+    except FileNotFoundError:
+        pokhara_pos = _hex_grid(20, isd_m=400)
+    scenarios.append(Scenario(
+        name="stress_pokhara_peakhour",
+        num_cells=len(pokhara_pos),
+        num_ues=len(pokhara_pos) * 30,
+        area_m=get_area_size(pokhara_pos),
+        cell_positions=pokhara_pos,
+        min_speed_mps=0.5,
+        max_speed_mps=14.0,
+        description="Stress: real Pokhara positions, 30 UEs/cell, 1.6× capacity demand",
+        mobility_model="random",
+        shadow_sigma_db=7.0,
+        min_demand_mbps=3.0,
+        max_demand_mbps=13.0,
+    ))
+
+    # S4. HIGHWAY JAM — 10 cells linear, 15 UEs/cell with traffic-jam slow mobility
+    # Different stress profile: moderate congestion + mobility constraints +
+    # linear topology (limited handover options).
+    # Aggregate per-cell demand: 15 × 12 = 180 Mbps → 1.2× cell capacity
+    highway_pos = _highway_layout(10, isd_m=800)
+    scenarios.append(Scenario(
+        name="stress_highway_jam",
+        num_cells=10,
+        num_ues=150,
+        area_m=get_area_size(highway_pos),
+        cell_positions=highway_pos,
+        min_speed_mps=1.0,    # traffic jam — slow
+        max_speed_mps=10.0,
+        description="Stress: highway traffic jam, 15 UEs/cell, linear topology",
+        mobility_model="highway",
+        shadow_sigma_db=7.0,
+        min_demand_mbps=4.0,
+        max_demand_mbps=20.0,
+    ))
+
+    return scenarios

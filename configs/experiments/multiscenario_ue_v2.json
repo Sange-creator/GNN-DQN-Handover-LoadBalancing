@@ -4,29 +4,49 @@
   "feature_mode": "ue_only",
   "prb_available": false,
   "seed": 42,
-  "episodes": 480,
+
+  "episodes": 600,
   "steps_per_episode": 120,
+  "behavioral_clone_episodes": 40,
+  "flat_dqn_episodes": 360,
+
   "eval_seeds": 20,
   "checkpoint_every_episodes": 60,
+  "checkpoint_include_replay": true,
+
+  "validation_scenarios": ["highway_fast", "overloaded_event", "real_pokhara"],
+  "validation_seeds": 5,
+  "validate_every_episodes": 20,
+  "validation_steps": 60,
+  "validation_ue_cap": 60,
+  "validation_steps_override": 40,
+  "skip_validation_epsilon_above": 0.5,
+
+  "early_stopping_min_episodes": 360,
+  "early_stopping_patience": 5,
+  "early_stopping_min_delta": 0.5,
+
+  "scenario_sampling_weights": {
+    "dense_urban": 1.0,
+    "highway": 1.2,
+    "highway_fast": 1.5,
+    "suburban": 0.8,
+    "sparse_rural": 0.6,
+    "overloaded_event": 1.5,
+    "real_pokhara": 1.0,
+    "pokhara_dense_peakhour": 1.4
+  },
+
   "train_scenarios": [
-    "dense_urban",
-    "highway",
-    "highway_fast",
-    "suburban",
-    "sparse_rural",
-    "overloaded_event",
-    "real_pokhara",
-    "pokhara_dense_peakhour"
+    "dense_urban", "highway", "highway_fast", "suburban",
+    "sparse_rural", "overloaded_event", "real_pokhara", "pokhara_dense_peakhour"
   ],
   "test_scenarios": [
-    "kathmandu_real",
-    "dharan_synthetic",
-    "unknown_hex_grid",
-    "coverage_hole"
+    "kathmandu_real", "dharan_synthetic", "unknown_hex_grid", "coverage_hole"
   ],
+
   "dqn": {
     "hidden_dim": 256,
-    "num_gcn_layers": 3,
     "dropout": 0.08,
     "gamma": 0.97,
     "learning_rate": 0.0003,
@@ -40,7 +60,7 @@
     "weight_decay": 1e-5,
     "epsilon_start": 1.0,
     "epsilon_end": 0.02,
-    "epsilon_decay_episodes": 380,
+    "epsilon_decay_episodes": 480,
     "dueling": true,
     "double_dqn": true,
     "use_gat": false,
