@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --bg: #f7fafc;
+        --ink: #102033;
+        --muted: #52657a;
+        --cyan: #087f99;
+        --green: #16a34a;
+        --amber: #f2b84b;
+        --red: #d64545;
+        --line: #d5e0ea;
+        --panel: #ffffff;
+        --panel-soft: #eef6fb;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      [data-composition-id="main"] {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          linear-gradient(90deg, rgba(14, 165, 198, 0.08) 1px, transparent 1px),
+          linear-gradient(0deg, rgba(16, 32, 51, 0.05) 1px, transparent 1px),
+          radial-gradient(circle at 16% 18%, rgba(14, 165, 198, 0.16), transparent 27%),
+          radial-gradient(circle at 86% 82%, rgba(242, 184, 75, 0.16), transparent 26%),
+          var(--bg);
+        background-size: 80px 80px, 80px 80px, auto, auto, auto;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        padding: 72px 96px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+        overflow: hidden;
+      }
+
+      .scene::before {
+        content: "";
+        position: absolute;
+        inset: 34px;
+        border: 1px solid rgba(16, 32, 51, 0.08);
+        pointer-events: none;
+      }
+
+      .kicker {
+        color: var(--cyan);
+        font-size: 24px;
+        font-weight: 760;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 1160px;
+        font-size: 86px;
+        line-height: 0.97;
+        font-weight: 840;
+        letter-spacing: -0.02em;
+      }
+
+      h2 {
+        max-width: 1040px;
+        font-size: 58px;
+        line-height: 1.04;
+        font-weight: 800;
+        letter-spacing: -0.015em;
+      }
+
+      h3 {
+        font-size: 32px;
+        line-height: 1.12;
+        font-weight: 760;
+      }
+
+      p,
+      li {
+        font-size: 28px;
+        line-height: 1.33;
+        color: var(--muted);
+      }
+
+      .small {
+        font-size: 22px;
+        line-height: 1.28;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1.02fr 0.98fr;
+        gap: 48px;
+        flex: 1;
+        min-height: 0;
+        align-items: stretch;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        width: 100%;
+      }
+
+      .panel {
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 18px 46px rgba(16, 32, 51, 0.08);
+        padding: 28px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .panel.compact {
+        padding: 22px;
+      }
+
+      .stat {
+        font-size: 72px;
+        font-weight: 840;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+      }
+
+      .stat-label {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 20px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 999px;
+        color: var(--ink);
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--cyan);
+      }
+
+      .dot.green {
+        background: var(--green);
+      }
+
+      .dot.amber {
+        background: var(--amber);
+      }
+
+      .dot.red {
+        background: var(--red);
+      }
+
+      .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 28px;
+      }
+
+      .caption {
+        max-width: 700px;
+        color: var(--muted);
+        font-size: 25px;
+        line-height: 1.28;
+      }
+
+      .timeline-note {
+        position: absolute;
+        right: 96px;
+        bottom: 64px;
+        color: rgba(82, 101, 122, 0.72);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .map {
+        position: relative;
+        height: 100%;
+        min-height: 580px;
+        background:
+          linear-gradient(135deg, rgba(242, 184, 75, 0.18), transparent 52%),
+          linear-gradient(90deg, rgba(16, 32, 51, 0.06) 1px, transparent 1px),
+          linear-gradient(0deg, rgba(16, 32, 51, 0.05) 1px, transparent 1px),
+          #fff;
+        background-size: auto, 64px 64px, 64px 64px, auto;
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+
+      .region {
+        position: absolute;
+        border: 2px solid rgba(16, 32, 51, 0.16);
+        background: rgba(255, 255, 255, 0.62);
+        border-radius: 40% 50% 42% 55%;
+        transform: rotate(-8deg);
+      }
+
+      .region.nepal {
+        left: 155px;
+        top: 170px;
+        width: 640px;
+        height: 280px;
+      }
+
+      .region-label {
+        position: absolute;
+        color: var(--ink);
+        font-size: 26px;
+        font-weight: 780;
+      }
+
+      .city {
+        position: absolute;
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--cyan);
+        box-shadow: 0 0 0 12px rgba(14, 165, 198, 0.12);
+      }
+
+      .city.amber {
+        background: var(--amber);
+        box-shadow: 0 0 0 12px rgba(242, 184, 75, 0.18);
+      }
+
+      .city.green {
+        background: var(--green);
+        box-shadow: 0 0 0 12px rgba(22, 163, 74, 0.14);
+      }
+
+      .city-label {
+        position: absolute;
+        transform: translate(28px, -16px);
+        white-space: nowrap;
+        color: var(--ink);
+        font-size: 22px;
+        font-weight: 760;
+      }
+
+      .tower {
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--cyan);
+        box-shadow: 0 0 0 10px rgba(14, 165, 198, 0.10);
+      }
+
+      .tower.green {
+        background: var(--green);
+      }
+
+      .tower.amber {
+        background: var(--amber);
+      }
+
+      .tower.red {
+        background: var(--red);
+      }
+
+      .ue {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--ink);
+        box-shadow: 0 0 0 8px rgba(16, 32, 51, 0.08);
+      }
+
+      .signal-ring {
+        position: absolute;
+        width: 110px;
+        height: 110px;
+        margin-left: -44px;
+        margin-top: -44px;
+        border-radius: 50%;
+        border: 2px solid rgba(14, 165, 198, 0.18);
+      }
+
+      .link {
+        position: absolute;
+        height: 4px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--cyan), var(--green));
+        transform-origin: left center;
+        opacity: 0.55;
+      }
+
+      .graph-stage {
+        position: relative;
+        height: 100%;
+        min-height: 620px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        overflow: hidden;
+      }
+
+      .graph-line {
+        position: absolute;
+        height: 3px;
+        background: rgba(14, 165, 198, 0.35);
+        transform-origin: left center;
+      }
+
+      .node {
+        position: absolute;
+        display: grid;
+        place-items: center;
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: #fff;
+        border: 3px solid var(--cyan);
+        color: var(--ink);
+        font-size: 22px;
+        font-weight: 820;
+        box-shadow: 0 14px 30px rgba(14, 165, 198, 0.14);
+      }
+
+      .node.serving {
+        border-color: var(--green);
+      }
+
+      .node.target {
+        border-color: var(--amber);
+      }
+
+      .feature-table {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .feature {
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        font-size: 20px;
+        font-weight: 720;
+        color: var(--ink);
+      }
+
+      .pipeline {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        height: 100%;
+      }
+
+      .pipe-step {
+        flex: 1;
+        min-height: 180px;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 10px;
+        position: relative;
+      }
+
+      .pipe-step strong {
+        color: var(--ink);
+        font-size: 26px;
+      }
+
+      .pipe-step span {
+        color: var(--muted);
+        font-size: 19px;
+        line-height: 1.22;
+      }
+
+      .arrow {
+        width: 42px;
+        height: 3px;
+        background: var(--cyan);
+        position: relative;
+        flex: 0 0 auto;
+      }
+
+      .arrow::after {
+        content: "";
+        position: absolute;
+        right: -4px;
+        top: -6px;
+        width: 14px;
+        height: 14px;
+        border-top: 3px solid var(--cyan);
+        border-right: 3px solid var(--cyan);
+        transform: rotate(45deg);
+      }
+
+      .matrix {
+        display: grid;
+        grid-template-columns: repeat(6, 36px);
+        gap: 8px;
+        align-content: center;
+        justify-content: center;
+      }
+
+      .cell {
+        height: 36px;
+        border-radius: 8px;
+        background: rgba(14, 165, 198, 0.14);
+        border: 1px solid rgba(14, 165, 198, 0.28);
+      }
+
+      .cell.green {
+        background: rgba(22, 163, 74, 0.16);
+        border-color: rgba(22, 163, 74, 0.35);
+      }
+
+      .cell.amber {
+        background: rgba(242, 184, 75, 0.20);
+        border-color: rgba(242, 184, 75, 0.42);
+      }
+
+      .batch-matrix {
+        grid-template-columns: repeat(12, 30px);
+      }
+
+      .batch-matrix .cell {
+        height: 30px;
+      }
+
+      .bar-chart {
+        display: grid;
+        grid-template-columns: 180px 1fr 110px;
+        gap: 14px;
+        align-items: center;
+        margin-top: 18px;
+      }
+
+      .bar-label {
+        font-size: 22px;
+        font-weight: 760;
+        color: var(--ink);
+      }
+
+      .bar-track {
+        height: 34px;
+        border-radius: 999px;
+        background: #e8eef5;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        width: var(--w);
+        border-radius: 999px;
+        background: var(--c);
+      }
+
+      .bar-value {
+        font-size: 23px;
+        font-weight: 800;
+        color: var(--ink);
+      }
+
+      .formula {
+        padding: 24px;
+        background: #ffffff;
+        color: #102033;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 22px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+
+      .figure {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 18px;
+        background: #fff;
+        border: 1px solid var(--line);
+      }
+
+      .son-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        align-items: stretch;
+      }
+
+      .knob {
+        position: relative;
+        height: 260px;
+        border-radius: 18px;
+        background: #fff;
+        border: 1px solid var(--line);
+        display: grid;
+        place-items: center;
+      }
+
+      .knob .dial {
+        width: 170px;
+        height: 170px;
+        border-radius: 50%;
+        border: 18px solid rgba(14, 165, 198, 0.18);
+        border-top-color: var(--green);
+        transform: rotate(-28deg);
+      }
+
+      .knob span {
+        position: absolute;
+        bottom: 24px;
+        font-size: 23px;
+        font-weight: 780;
+        color: var(--ink);
+      }
+
+      .compare-card {
+        min-height: 290px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .compare-card .top {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: center;
+      }
+
+      .method-name {
+        font-size: 32px;
+        font-weight: 820;
+        color: var(--ink);
+      }
+
+      .metric-line {
+        display: flex;
+        justify-content: space-between;
+        border-top: 1px solid var(--line);
+        padding-top: 14px;
+        font-size: 22px;
+        color: var(--muted);
+      }
+
+      .metric-line strong {
+        color: var(--ink);
+      }
+
+      .deploy-stack {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 20px;
+        align-items: stretch;
+      }
+
+      .stack-item {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 22px;
+        min-height: 220px;
+      }
+
+      .stack-item strong {
+        display: block;
+        color: var(--ink);
+        font-size: 27px;
+        margin-bottom: 12px;
+      }
+
+      .stack-item span {
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 1.25;
+      }
+
+      .transition {
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        pointer-events: none;
+      }
+
+      .transition .wipe-block {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+        background: #f7fafc;
+        transform: translateX(-105%);
+      }
+
+      .transition .scan {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 18px;
+        background: linear-gradient(var(--cyan), var(--green));
+        transform: translateX(-80px);
+        box-shadow: 0 0 28px rgba(14, 165, 198, 0.5);
+      }
+
+      .footer-mark {
+        position: absolute;
+        left: 96px;
+        bottom: 54px;
+        font-size: 18px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 760;
+        color: rgba(63, 80, 98, 0.9);
+      }
+
+      #s6 p {
+        font-size: 24px;
+      }
+
+      #s6 .pipe-step {
+        min-height: 150px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="60" data-width="1920" data-height="1080">
+      <div id="s1" class="clip scene" data-start="0" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Defense explainer</div>
+            <h1>SON-GNN-DQN for smarter cellular handover</h1>
+          </div>
+          <div class="badge"><span class="dot green"></span> UE_ONLY first, O-RAN ready later</div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>The core idea</h3>
+            <p>A graph neural network learns which target cell each UE prefers, then a safety-bounded SON layer converts those preferences into standard A3, CIO, and TTT handover settings.</p>
+            <div class="grid-3" style="margin-top: 30px">
+              <div><div class="stat">11</div><div class="stat-label">UE-only features</div></div>
+              <div><div class="stat">20+</div><div class="stat-label">cell topologies</div></div>
+              <div><div class="stat">0.000</div><div class="stat-label">SON ping-pong avg</div></div>
+            </div>
+          </div>
+          <div class="map">
+            <div class="tower" style="left: 150px; top: 135px"></div>
+            <div class="tower green" style="left: 420px; top: 210px"></div>
+            <div class="tower amber" style="left: 620px; top: 390px"></div>
+            <div class="tower" style="left: 300px; top: 470px"></div>
+            <div class="signal-ring" style="left: 150px; top: 135px"></div>
+            <div class="signal-ring" style="left: 420px; top: 210px"></div>
+            <div class="signal-ring" style="left: 620px; top: 390px"></div>
+            <div class="link" style="left: 160px; top: 150px; width: 280px; transform: rotate(16deg)"></div>
+            <div class="link" style="left: 430px; top: 226px; width: 280px; transform: rotate(42deg)"></div>
+            <div class="link" style="left: 316px; top: 475px; width: 330px; transform: rotate(-14deg)"></div>
+            <div class="ue ue-a" style="left: 245px; top: 250px"></div>
+            <div class="ue ue-b" style="left: 540px; top: 335px"></div>
+          </div>
+        </div>
+        <div class="footer-mark">GNN-DQN handover load balancing</div>
+      </div>
+
+      <div id="s2" class="clip scene" data-start="5" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Why handover is hard</div>
+            <h2>A strong signal is not always the best serving cell</h2>
+          </div>
+          <p class="caption">Real users move through dense city grids, highways, rural gaps, and event congestion. A good policy must balance signal, load, outage, and stability.</p>
+        </div>
+        <div class="grid-2">
+          <div class="map">
+            <div class="region nepal"></div>
+            <div class="region-label" style="left: 385px; top: 255px">Nepal deployment map</div>
+            <div class="city amber" data-layout-allow-overflow style="left: 335px; top: 270px"><span class="city-label">Pokhara</span></div>
+            <div class="city" data-layout-allow-overflow style="left: 560px; top: 235px"><span class="city-label">Kathmandu</span></div>
+            <div class="city green" data-layout-allow-overflow style="left: 710px; top: 315px"><span class="city-label">Dharan</span></div>
+            <div class="link" style="left: 350px; top: 286px; width: 236px; transform: rotate(-10deg)"></div>
+            <div class="link" style="left: 580px; top: 251px; width: 168px; transform: rotate(29deg)"></div>
+          </div>
+          <div class="panel">
+            <h3>Scenario families</h3>
+            <div class="feature-table">
+              <div class="feature">dense urban</div>
+              <div class="feature">real Pokhara</div>
+              <div class="feature">Kathmandu holdout</div>
+              <div class="feature">highway fast</div>
+              <div class="feature">sparse rural</div>
+              <div class="feature">coverage hole</div>
+              <div class="feature">overloaded event</div>
+              <div class="feature">unknown hex grid</div>
+            </div>
+            <p style="margin-top: 28px">The GNN does not memorize one map. It learns local relationships between neighboring cells, then transfers that logic to unseen geography.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="s3" class="clip scene" data-start="10" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">UE-observable data</div>
+            <h2>The model sees what a phone or drive test can report</h2>
+          </div>
+          <div class="badge"><span class="dot amber"></span> RSRQ is a proxy, not real PRB</div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="pipeline">
+              <div class="pipe-step"><strong>RSRP</strong><span>How strong each nearby cell sounds.</span></div>
+              <div class="arrow"></div>
+              <div class="pipe-step"><strong>RSRQ</strong><span>Quality affected by interference and load.</span></div>
+              <div class="arrow"></div>
+              <div class="pipe-step"><strong>History</strong><span>Speed, trend, serving cell, previous cell, time since handover.</span></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>UE_ONLY state per candidate cell</h3>
+            <div class="feature-table">
+              <div class="feature">rsrp_norm</div>
+              <div class="feature">rsrq_norm</div>
+              <div class="feature">rsrp_delta</div>
+              <div class="feature">rsrq_delta</div>
+              <div class="feature">rsrp_trend</div>
+              <div class="feature">is_serving</div>
+              <div class="feature">speed class</div>
+              <div class="feature">load_proxy_rsrq</div>
+            </div>
+            <p style="margin-top: 24px">Shape for one UE: N cells by 11 features. The action is the target cell, with invalid weak cells masked out.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="s4" class="clip scene" data-start="15" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Topology understanding</div>
+            <h2>Cells become graph nodes, and nearby cells exchange information</h2>
+          </div>
+          <p class="caption">This is why a model trained on one set of cell counts can infer on Kathmandu-style 25-cell and larger topologies.</p>
+        </div>
+        <div class="grid-2">
+          <div class="graph-stage">
+            <div class="graph-line" style="left: 300px; top: 210px; width: 290px; transform: rotate(18deg)"></div>
+            <div class="graph-line" style="left: 560px; top: 300px; width: 310px; transform: rotate(34deg)"></div>
+            <div class="graph-line" style="left: 340px; top: 520px; width: 420px; transform: rotate(-15deg)"></div>
+            <div class="graph-line" style="left: 260px; top: 236px; width: 360px; transform: rotate(80deg)"></div>
+            <div class="node serving" style="left: 240px; top: 170px">S</div>
+            <div class="node" style="left: 530px; top: 255px">1</div>
+            <div class="node target" style="left: 760px; top: 425px">T</div>
+            <div class="node" style="left: 300px; top: 505px">2</div>
+            <div class="node" style="left: 660px; top: 590px">3</div>
+            <div class="ue ue-c" style="left: 410px; top: 380px"></div>
+          </div>
+          <div class="panel">
+            <h3>Graph message passing</h3>
+            <div class="formula">h_i^(k+1) = GNN(h_i, messages from neighbors)
+
+Q(s, cell) = V(s) + A(s, cell) - mean(A)</div>
+            <p style="margin-top: 24px">The GNN learns patterns like: target is stronger, less loaded, improving, and close enough to be safe.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="s5" class="clip scene" data-start="20" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Model architecture</div>
+            <h2>Three GNN layers feed a dueling Double DQN head</h2>
+          </div>
+          <div class="badge"><span class="dot green"></span> dropout off during target inference</div>
+        </div>
+        <div class="panel" style="flex: 1">
+          <div class="pipeline">
+            <div class="pipe-step"><strong>Cell feature table</strong><span>N by 11 UE_ONLY feature matrix for one UE.</span><div class="matrix mini-matrix"></div></div>
+            <div class="arrow"></div>
+            <div class="pipe-step"><strong>GCN or GAT</strong><span>Three message-passing layers with LayerNorm and dropout.</span></div>
+            <div class="arrow"></div>
+            <div class="pipe-step"><strong>Dueling Q-head</strong><span>Value stream plus per-cell advantage stream.</span></div>
+            <div class="arrow"></div>
+            <div class="pipe-step"><strong>Valid target</strong><span>Pick highest Q-value after masking invalid cells.</span></div>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="panel compact"><div class="stat">GCN</div><div class="stat-label">main path</div></div>
+          <div class="panel compact"><div class="stat">Double</div><div class="stat-label">reduces Q overestimate</div></div>
+          <div class="panel compact"><div class="stat">Dueling</div><div class="stat-label">state value + cell advantage</div></div>
+        </div>
+      </div>
+
+      <div id="s6" class="clip scene" data-start="25" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Training flow</div>
+            <h2>Each episode creates experience from moving UEs, then replay trains the model</h2>
+          </div>
+          <p class="caption">Training uses scenario mixing, epsilon exploration, target networks, optional prioritized replay, n-step returns, and held-out SON validation.</p>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="pipeline" style="flex-direction: column; align-items: stretch">
+              <div class="pipe-step train-step"><strong>1. Pick scenario</strong><span>dense urban, highway, Pokhara, event, rural, holdout validation.</span></div>
+              <div class="pipe-step train-step"><strong>2. Advance mobility</strong><span>UEs move, shadowing updates, coherent RSRP/RSRQ snapshot refreshes.</span></div>
+              <div class="pipe-step train-step"><strong>3. Act and store</strong><span>state, action, reward, next state, done, valid mask.</span></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Replay mini-batch</h3>
+            <div class="matrix batch-matrix"></div>
+            <p style="margin-top: 26px">B graphs are copied into one disconnected batch: B times N cell nodes. The code passes batch_size and nodes_per_graph so a 40-cell topology is never mistaken for two 20-cell graphs.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="s7" class="clip scene" data-start="30" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Reward and learning</div>
+            <h2>The reward teaches useful handovers, not just more handovers</h2>
+          </div>
+          <div class="badge"><span class="dot red"></span> ping-pong is heavily penalized</div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Reward ingredients</h3>
+            <div class="bar-chart">
+              <div class="bar-label">Throughput</div><div class="bar-track"><div class="bar-fill" style="--w: 92%; --c: var(--green)"></div></div><div class="bar-value">reward</div>
+              <div class="bar-label">Fairness</div><div class="bar-track"><div class="bar-fill" style="--w: 78%; --c: var(--cyan)"></div></div><div class="bar-value">reward</div>
+              <div class="bar-label">Proactive HO</div><div class="bar-track"><div class="bar-fill" style="--w: 70%; --c: var(--amber)"></div></div><div class="bar-value">bonus</div>
+              <div class="bar-label">Ping-pong</div><div class="bar-track"><div class="bar-fill" style="--w: 86%; --c: var(--red)"></div></div><div class="bar-value">penalty</div>
+              <div class="bar-label">Outage</div><div class="bar-track"><div class="bar-fill" style="--w: 74%; --c: var(--red)"></div></div><div class="bar-value">penalty</div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="formula">y = r_0 + gamma r_1 + ... + gamma^n Q_target(s', argmax Q_online)
+
+loss = Huber(Q_online(s, a) - y)
+
+PER: large TD-error samples return more often</div>
+            <p style="margin-top: 24px">In plain language: the model compares what it predicted with what actually happened, then adjusts its handover preference rule.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="s8" class="clip scene" data-start="35" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Deployable algorithm</div>
+            <h2>SON-GNN-DQN turns learned preferences into safe network knobs</h2>
+          </div>
+          <p class="caption">Raw GNN-DQN is a research baseline. The defense-ready method is the SON layer that adjusts bounded CIO and TTT while standard A3 still executes the handover.</p>
+        </div>
+        <div class="grid-2">
+          <div class="son-grid">
+            <div class="knob cio-knob"><div class="dial"></div><span>CIO bounded: -6 dB to +6 dB</span></div>
+            <div class="knob ttt-knob"><div class="dial"></div><span>TTT adapts when ping-pong rises</span></div>
+            <div class="panel compact"><h3>Preference share</h3><p class="small">Count how many UEs served by cell A prefer target B.</p></div>
+            <div class="panel compact"><h3>Rollback</h3><p class="small">Undo CIO changes if throughput drops or ping-pong increases.</p></div>
+          </div>
+          <div class="panel">
+            <div class="formula">RSRP_target + CIO(source,target)
+  > RSRP_serving + A3_offset
+
+condition must hold for TTT steps
+
+GNN preference becomes a safe parameter update</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="s9" class="clip scene" data-start="40" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Evidence</div>
+            <h2>Compared against classical and learning baselines</h2>
+          </div>
+          <div class="badge"><span class="dot green"></span> final tables include seven methods</div>
+        </div>
+        <div class="grid-3">
+          <div class="panel compare-card">
+            <div class="top"><div class="method-name">A3-TTT</div><div class="badge">telecom baseline</div></div>
+            <div class="metric-line"><span>Avg throughput</span><strong>4.699 Mbps</strong></div>
+            <div class="metric-line"><span>HO / 1000</span><strong>9.8</strong></div>
+            <div class="metric-line"><span>Ping-pong</span><strong>0.000</strong></div>
+          </div>
+          <div class="panel compare-card">
+            <div class="top"><div class="method-name">Random valid</div><div class="badge"><span class="dot red"></span> unsafe</div></div>
+            <div class="metric-line"><span>Avg throughput</span><strong>3.840 Mbps</strong></div>
+            <div class="metric-line"><span>HO / 1000</span><strong>910.5</strong></div>
+            <div class="metric-line"><span>Ping-pong</span><strong>0.093</strong></div>
+          </div>
+          <div class="panel compare-card">
+            <div class="top"><div class="method-name">SON-GNN-DQN</div><div class="badge"><span class="dot green"></span> deployable</div></div>
+            <div class="metric-line"><span>Avg throughput</span><strong>4.698 Mbps</strong></div>
+            <div class="metric-line"><span>HO / 1000</span><strong>9.9</strong></div>
+            <div class="metric-line"><span>Ping-pong</span><strong>0.000</strong></div>
+          </div>
+        </div>
+        <p class="caption" style="max-width: 1180px">The honest defense claim: SON-GNN-DQN is A3-competitive across evaluated scenarios while maintaining near-zero ping-pong and preserving a safer deployment path.</p>
+      </div>
+
+      <div id="s10" class="clip scene" data-start="45" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Real artifacts</div>
+            <h2>Project figures show topology generalization and multi-metric behavior</h2>
+          </div>
+        </div>
+        <div class="grid-3" style="flex: 1">
+          <img class="figure" src="assets/topology_generalization.png" alt="Topology generalization figure" />
+          <img class="figure" src="assets/radar_multimetric.png" alt="Radar multi-metric figure" />
+          <img class="figure" src="assets/throughput_comparison.png" alt="Throughput comparison figure" />
+        </div>
+      </div>
+
+      <div id="s11" class="clip scene" data-start="50" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Deployment path</div>
+            <h2>From drive-test compatible UE_ONLY to future O-RAN/E2</h2>
+          </div>
+          <div class="badge"><span class="dot amber"></span> O-RAN is future/demo, not the main headline</div>
+        </div>
+        <div class="deploy-stack">
+          <div class="stack-item"><strong>1. UE reports</strong><span>RSRP, RSRQ, trend, speed, serving state, handover history.</span></div>
+          <div class="stack-item"><strong>2. GNN-DQN</strong><span>Scores per-UE target preferences over the topology graph.</span></div>
+          <div class="stack-item"><strong>3. SON layer</strong><span>Aggregates preferences and updates bounded CIO/TTT values.</span></div>
+          <div class="stack-item"><strong>4. Standard A3</strong><span>Executes handover only when offset and TTT conditions are satisfied.</span></div>
+          <div class="stack-item"><strong>5. O-RAN/E2</strong><span>Later adds true PRB and KPM counters through near-RT RIC integration.</span></div>
+        </div>
+        <div class="panel">
+          <p>Drive-test data without PRB remains valid: PRB utilization is zero and PRB availability is zero. RSRQ-derived load is always described as a proxy, never as real PRB utilization.</p>
+        </div>
+      </div>
+
+      <div id="s12" class="clip scene" data-start="55" data-duration="5" data-track-index="1">
+        <div class="header-row">
+          <div>
+            <div class="kicker">Defense closing</div>
+            <h1>The contribution is safe learning over changing topologies</h1>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="panel compact"><div class="stat">Graph</div><div class="stat-label">understands topology</div><p class="small" style="margin-top: 14px">Cells are nodes, nearby cells are edges, and message passing learns relationships.</p></div>
+          <div class="panel compact"><div class="stat">DQN</div><div class="stat-label">learns preferences</div><p class="small" style="margin-top: 14px">Rewards balance throughput, fairness, outage, load, and ping-pong.</p></div>
+          <div class="panel compact"><div class="stat">SON</div><div class="stat-label">keeps deployment safe</div><p class="small" style="margin-top: 14px">Preferences become bounded CIO/TTT changes, not unsafe direct commands.</p></div>
+        </div>
+        <div class="panel">
+          <h3>Final line for professors</h3>
+          <p>Our system is SON-compatible today, O-RAN extensible tomorrow, and designed to generalize across real and synthetic cellular geography.</p>
+        </div>
+      </div>
+
+      <div class="clip transition" id="tr1" data-start="4.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr2" data-start="9.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr3" data-start="14.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr4" data-start="19.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr5" data-start="24.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr6" data-start="29.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr7" data-start="34.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr8" data-start="39.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr9" data-start="44.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr10" data-start="49.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+      <div class="clip transition" id="tr11" data-start="54.6" data-duration="0.4" data-track-index="2"><div class="wipe-block"></div><div class="scan"></div></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      function enter(scene, time) {
+        const addFrom = (selector, vars, at) => {
+          if (document.querySelector(selector)) {
+            tl.from(selector, vars, at);
+          }
+        };
+        addFrom(`${scene} .kicker`, { opacity: 0, y: 18, duration: 0.45, ease: "power3.out" }, time + 0.12);
+        addFrom(`${scene} h1, ${scene} h2`, { opacity: 0, y: 36, duration: 0.62, ease: "power3.out" }, time + 0.22);
+        addFrom(`${scene} .caption, ${scene} .badge`, { opacity: 0, y: 18, duration: 0.48, stagger: 0.06, ease: "power3.out" }, time + 0.45);
+        addFrom(`${scene} .panel, ${scene} .map, ${scene} .graph-stage, ${scene} .figure, ${scene} .stack-item`, { opacity: 0, y: 28, scale: 0.985, duration: 0.55, stagger: 0.08, ease: "power3.out" }, time + 0.58);
+      }
+
+      [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].forEach((t, i) => enter(`#s${i + 1}`, t));
+
+      function transition(id, time) {
+        tl.fromTo(`#${id} .wipe-block`, { xPercent: -105 }, { xPercent: 105, duration: 0.4, ease: "power2.inOut" }, time);
+        tl.fromTo(`#${id} .scan`, { x: -80 }, { x: 2000, duration: 0.4, ease: "power2.inOut" }, time);
+      }
+
+      [
+        ["tr1", 4.6],
+        ["tr2", 9.6],
+        ["tr3", 14.6],
+        ["tr4", 19.6],
+        ["tr5", 24.6],
+        ["tr6", 29.6],
+        ["tr7", 34.6],
+        ["tr8", 39.6],
+        ["tr9", 44.6],
+        ["tr10", 49.6],
+        ["tr11", 54.6],
+      ].forEach(([id, t]) => transition(id, t));
+
+      const matrixTargets = document.querySelectorAll(".matrix");
+      matrixTargets.forEach((target) => {
+        const total = target.classList.contains("batch-matrix") ? 72 : 24;
+        for (let i = 0; i < total; i++) {
+          const div = document.createElement("div");
+          div.className = `cell ${i % 5 === 0 ? "green" : i % 7 === 0 ? "amber" : ""}`;
+          target.appendChild(div);
+        }
+      });
+
+      tl.to("#s1 .ue-a", { x: 250, y: 80, duration: 3.8, ease: "sine.inOut" }, 0.8);
+      tl.to("#s1 .ue-b", { x: -180, y: 100, duration: 3.7, ease: "sine.inOut" }, 0.9);
+      tl.from("#s2 .region", { opacity: 0, scale: 0.88, duration: 0.65, ease: "power3.out" }, 5.55);
+      tl.from("#s2 .city", { opacity: 0, scale: 0.4, duration: 0.38, stagger: 0.1, ease: "back.out(1.8)" }, 5.9);
+      tl.from("#s4 .node", { opacity: 0, scale: 0.25, duration: 0.38, stagger: 0.055, ease: "back.out(1.8)" }, 15.65);
+      tl.from("#s4 .graph-line", { scaleX: 0, duration: 0.4, stagger: 0.04, ease: "power3.out" }, 15.95);
+      tl.to("#s4 .ue-c", { x: 360, y: 76, duration: 3.6, ease: "sine.inOut" }, 15.9);
+      tl.from(".mini-matrix .cell", { opacity: 0, scale: 0.2, duration: 0.2, stagger: 0.014, ease: "power3.out" }, 20.7);
+      tl.from(".batch-matrix .cell", { opacity: 0, scale: 0.35, duration: 0.18, stagger: 0.007, ease: "power3.out" }, 25.7);
+      tl.from("#s7 .bar-fill", { width: 0, duration: 0.65, stagger: 0.08, ease: "expo.out" }, 30.75);
+      tl.from("#s8 .dial", { rotation: -180, opacity: 0, duration: 0.62, stagger: 0.12, ease: "power3.out" }, 35.75);
+      tl.from("#s9 .stat, #s9 .metric-line strong", { textContent: 0, duration: 0.68, snap: { textContent: 0.001 }, ease: "power2.out" }, 40.75);
+      tl.to("#s12", { opacity: 0, duration: 0.65, ease: "power2.in" }, 59.15);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
