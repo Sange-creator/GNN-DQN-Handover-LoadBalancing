@@ -48,6 +48,10 @@ class StrongestRsrpPolicy:
     def select(self, env: CellularNetworkEnv, ue_idx: int) -> int:
         rsrp = env.rsrp_matrix()[ue_idx]
         current = int(env.serving[ue_idx])
+        valid = env.valid_actions(ue_idx)
+        rsrp = rsrp.copy()
+        rsrp[~valid] = -1e9
+        rsrp[current] = env.rsrp_matrix()[ue_idx, current]
         best = int(np.argmax(rsrp))
         if rsrp[best] > rsrp[current] + self.hysteresis_db:
             return best
@@ -70,6 +74,10 @@ class A3HandoverPolicy:
     def select(self, env: CellularNetworkEnv, ue_idx: int) -> int:
         rsrp = env.rsrp_matrix()[ue_idx]
         current = int(env.serving[ue_idx])
+        valid = env.valid_actions(ue_idx)
+        rsrp = rsrp.copy()
+        rsrp[~valid] = -1e9
+        rsrp[current] = env.rsrp_matrix()[ue_idx, current]
         best = int(np.argmax(rsrp))
 
         if best != current and rsrp[best] > rsrp[current] + self.offset_db:

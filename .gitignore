@@ -6,7 +6,7 @@ __pycache__/
 .idea/
 .claude/
 venv/
-env/
+/env/
 .env
 *.pt
 *.pth

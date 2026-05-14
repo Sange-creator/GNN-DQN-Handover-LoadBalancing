@@ -462,9 +462,9 @@ Deliver each chapter as a separate markdown file with LaTeX equations
 format wrapped in markdown code blocks.
 
 File naming:
-- `chapter1_introduction.md`
-- `chapter2_literature_review.md`
-- `chapter3_methodology.md`
-- `chapter4_results.md` (with placeholders)
-- `chapter5_conclusion.md`
-- `abstract.md`
+- `docs/thesis/chapter1_introduction.md`
+- `docs/thesis/chapter2_literature_review.md`
+- `docs/thesis/chapter3_methodology.md`
+- `docs/thesis/chapter4_results.md` (with placeholders)
+- `docs/thesis/chapter5_conclusion.md`
+- `docs/thesis/abstract.md`

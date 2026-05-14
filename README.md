@@ -65,13 +65,21 @@ diagnostic only and should not be cited as final results.
 configs/experiments/      JSON configs for smoke, UE-only, Pokhara, and O-RAN runs
 data/raw/                 OpenCellID, ns-3, synthetic, and drive-test inputs
 data/processed/           Cleaned/generated datasets (ignored by git)
-docs/                     Project notes, guides, and paper material
+docs/thesis/              Thesis chapters and abstract
+docs/reports/             Evaluation reports and narrative summaries
+docs/guides/              Human-readable guides and DOCX exports
+docs/references/          External reference papers and PDFs
+docs/sites/               Presentation/demo websites
 scripts/                  Config-driven train/evaluate/data/figure entrypoints
 src/handover_gnn_dqn/     Reusable package code
 tests/                    Unit/integration/regression acceptance tests
+tools/                    Utility scripts for data collection and external tooling
+web_dashboard/            Optional local dashboard app
 results/archive_prefix/   Archived pre-fix diagnostic outputs
 results/runs/             New generated runs (ignored by git)
 ```
+
+See `docs/REPO_LAYOUT.md` for the full code-vs-documentation organization rule.
 
 ## Feature Profiles
 

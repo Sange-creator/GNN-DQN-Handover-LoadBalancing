@@ -40,3 +40,12 @@ def test_gnn_batched_training_shape_is_explicit() -> None:
         nodes_per_graph=20,
     )
     assert q.shape == (2, 20)
+
+
+def test_gat_config_rejects_incompatible_head_dimensions() -> None:
+    with pytest.raises(ValueError, match="hidden_dim"):
+        GnnDQNAgent(
+            num_cells=4,
+            feature_dim=11,
+            cfg=DQNConfig(hidden_dim=30, use_gat=True, gat_heads=8),
+        )

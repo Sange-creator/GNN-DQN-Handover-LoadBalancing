@@ -207,6 +207,18 @@ class SONController:
     def _collect_preferences(self, env: CellularNetworkEnv) -> np.ndarray:
         preferences = np.zeros((env.cfg.num_cells, env.cfg.num_cells), dtype=float)
         edge_index, edge_weight = env.edge_data
+        if hasattr(self.agent, "act_batch"):
+            targets = self.agent.act_batch(
+                env.build_all_states(),
+                edge_index,
+                edge_weight,
+                env.valid_actions_all(),
+                epsilon=0.0,
+                rng=np.random.default_rng(0),
+            )
+            np.add.at(preferences, (env.serving.astype(int), targets.astype(int)), 1.0)
+            return preferences
+
         for ue_idx in range(env.cfg.num_ues):
             source = int(env.serving[ue_idx])
             state = torch.from_numpy(env.build_state(ue_idx)).float()

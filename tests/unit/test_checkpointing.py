@@ -46,3 +46,29 @@ def test_checkpoint_metadata_round_trip_and_compatibility(tmp_path) -> None:
             expected_feature_profile="oran_e2",
             expected_feature_dim=15,
         )
+
+
+def test_checkpoint_loader_ignores_unknown_dqn_metadata_keys(tmp_path) -> None:
+    env = CellularNetworkEnv(LTEConfig(feature_mode="ue_only", prb_available=False))
+    cfg = {
+        "run_name": "unit",
+        "feature_mode": "ue_only",
+        "prb_available": False,
+        "dqn": {"hidden_dim": 32, "future_unused_knob": 123},
+    }
+    agent = GnnDQNAgent(env.cfg.num_cells, env.feature_dim, DQNConfig(hidden_dim=32))
+    checkpoint = tmp_path / "gnn_unknown_key.pt"
+
+    save_checkpoint(
+        agent,
+        checkpoint,
+        config=cfg,
+        feature_dim=env.feature_dim,
+        max_cells=env.cfg.num_cells,
+        scenario_names=["unit"],
+        history=[],
+        cwd=tmp_path,
+    )
+
+    loaded, _meta, _payload = load_gnn_checkpoint(checkpoint)
+    assert loaded.cfg.hidden_dim == 32

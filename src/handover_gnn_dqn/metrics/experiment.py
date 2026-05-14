@@ -35,15 +35,32 @@ class FlatDqnPolicy:
         pass
 
     def select(self, env: CellularNetworkEnv, ue_idx: int) -> int:
-        state_t = torch.from_numpy(env.build_state(ue_idx)).float()
+        state = env.build_state(ue_idx)
+        valid = env.valid_actions(ue_idx)
+        if env.cfg.num_cells < self.agent.num_cells:
+            padded = np.zeros((self.agent.num_cells, env.feature_dim), dtype=np.float32)
+            padded[: env.cfg.num_cells] = state
+            valid_padded = np.zeros(self.agent.num_cells, dtype=bool)
+            valid_padded[: env.cfg.num_cells] = valid
+            state = padded
+            valid = valid_padded
+        elif env.cfg.num_cells > self.agent.num_cells:
+            state = state[: self.agent.num_cells]
+            valid = valid[: self.agent.num_cells].copy()
+            if int(env.serving[ue_idx]) >= self.agent.num_cells and not valid.any():
+                valid[:] = True
+        state_t = torch.from_numpy(state).float()
         return self.agent.act(
             state_t,
             epsilon=self.epsilon,
-            valid_mask=env.valid_actions(ue_idx),
+            valid_mask=valid,
         )
 
 
 def run_policy_episode(env: CellularNetworkEnv, policy, steps: int, seed: int) -> Dict[str, float]:
+    if steps <= 0:
+        raise ValueError("steps must be positive")
+
     rng = np.random.default_rng(seed)
     policy.reset(env)
     step_metrics: List[Dict[str, float]] = []
@@ -76,6 +93,11 @@ def evaluate_policies(
 ) -> List[Dict[str, float]]:
     rows: List[Dict[str, float]] = []
     seeds_list = list(seeds)
+    if not seeds_list:
+        raise ValueError("seeds must contain at least one seed")
+    if steps <= 0:
+        raise ValueError("steps must be positive")
+
     for name, make_policy in policy_factories.items():
         episode_rows = []
         for seed in seeds_list:
@@ -93,7 +115,13 @@ def evaluate_policies(
     return rows
 
 
-def default_policy_factories(gnn_agent=None, flat_agent=None) -> Dict[str, PolicyFactory]:
+def default_policy_factories(
+    gnn_agent=None,
+    flat_agent=None,
+    *,
+    son_config: SONConfig | None = None,
+    include_true_prb: bool = False,
+) -> Dict[str, PolicyFactory]:
     policies: Dict[str, PolicyFactory] = {
         "no_handover": lambda: NoHandoverPolicy(),
         "random_valid": lambda: RandomValidPolicy(seed=1234),
@@ -105,17 +133,21 @@ def default_policy_factories(gnn_agent=None, flat_agent=None) -> Dict[str, Polic
         policies["flat_dqn"] = lambda: FlatDqnPolicy(flat_agent, epsilon=0.0)
     if gnn_agent is not None:
         policies["gnn_dqn"] = lambda: GnnDqnPolicy(gnn_agent, epsilon=0.0)
-        policies["son_gnn_dqn"] = lambda: SONTunedA3Policy(gnn_agent)
-        # Network-cooperative SON: same model + SON layer, but the load
-        # signal comes from true PRB (PM counters / E2 KPM) instead of the
-        # RSRQ proxy. Quantifies the value of network-side load visibility.
-        policies["son_gnn_dqn_true_prb"] = lambda: SONTunedA3Policy(
-            gnn_agent, SONConfig(load_signal="true_prb")
-        )
+        policies["son_gnn_dqn"] = lambda: SONTunedA3Policy(gnn_agent, son_config)
+        if include_true_prb:
+            # Network-cooperative SON ablation: same model + SON layer, but the
+            # load signal comes from true PRB (PM counters / E2 KPM) instead of
+            # the RSRQ proxy. Keep this out of the main UE-only result tables.
+            policies["son_gnn_dqn_true_prb"] = lambda: SONTunedA3Policy(
+                gnn_agent, SONConfig(load_signal="true_prb")
+            )
     return policies
 
 
 def write_summary_csv(rows: List[Dict[str, float]], path: Path) -> None:
+    if not rows:
+        raise ValueError("rows must contain at least one result")
+
     path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = list(rows[0].keys())
     for row in rows[1:]:

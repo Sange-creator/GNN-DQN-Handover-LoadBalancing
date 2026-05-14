@@ -23,7 +23,6 @@ DEVICE = torch.device("cpu")
 @dataclass(frozen=True)
 class DQNConfig:
     hidden_dim: int = 128
-    num_gcn_layers: int = 3
     dropout: float = 0.1
     gamma: float = 0.97
     learning_rate: float = 1e-4
@@ -195,6 +194,16 @@ class GnnDQNAgent(nn.Module):
 
         if cfg.use_gat:
             heads = cfg.gat_heads
+            if heads <= 0:
+                raise ValueError("gat_heads must be positive when use_gat=True")
+            if cfg.hidden_dim % heads != 0:
+                raise ValueError(
+                    f"hidden_dim ({cfg.hidden_dim}) must be divisible by gat_heads ({heads})"
+                )
+            if embed_dim % heads != 0:
+                raise ValueError(
+                    f"GAT embed_dim ({embed_dim}) must be divisible by gat_heads ({heads})"
+                )
             self.conv1 = GATConv(feature_dim, cfg.hidden_dim // heads, heads=heads, concat=True)
             self.conv2 = GATConv(cfg.hidden_dim, cfg.hidden_dim // heads, heads=heads, concat=True)
             self.conv3 = GATConv(cfg.hidden_dim, embed_dim // heads, heads=heads, concat=True)
@@ -320,6 +329,66 @@ class GnnDQNAgent(nn.Module):
                 )
             q[~valid_mask] = float("-inf")
             return int(q.argmax().item())
+
+    def act_batch(
+        self,
+        states: np.ndarray,
+        edge_index: torch.Tensor,
+        edge_weight: torch.Tensor,
+        valid_masks: np.ndarray,
+        epsilon: float,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        """Select actions for all UEs in one batched forward pass.
+
+        Args:
+            states: (num_ues, num_cells, feature_dim) padded state array
+            edge_index: shared topology edges
+            edge_weight: shared topology weights
+            valid_masks: (num_ues, num_cells) boolean masks
+            epsilon: exploration rate
+            rng: random generator
+
+        Returns:
+            actions: (num_ues,) integer action array
+        """
+        num_ues = states.shape[0]
+        num_cells = states.shape[1]
+        actions = np.empty(num_ues, dtype=np.int64)
+
+        explore = rng.random(num_ues) < epsilon
+        for i in np.where(explore)[0]:
+            valid_idx = np.where(valid_masks[i])[0]
+            if len(valid_idx) == 0:
+                valid_idx = np.arange(num_cells)
+            actions[i] = rng.choice(valid_idx)
+
+        greedy_idx = np.where(~explore)[0]
+        if len(greedy_idx) > 0:
+            greedy_states = torch.from_numpy(states[greedy_idx]).float()
+            batch_size = len(greedy_idx)
+            x_flat = greedy_states.reshape(batch_size * num_cells, -1)
+
+            ei = edge_index
+            ei_batch = torch.cat([ei + i * num_cells for i in range(batch_size)], dim=1)
+            ew_batch = edge_weight.repeat(batch_size)
+
+            with torch.no_grad():
+                was_training = self.training
+                self.eval()
+                q_all = self.forward(
+                    x_flat, ei_batch, ew_batch,
+                    batch_size=batch_size, nodes_per_graph=num_cells,
+                )
+                if was_training:
+                    self.train()
+
+            masks = torch.from_numpy(valid_masks[greedy_idx]).bool()
+            q_all[~masks] = float("-inf")
+            greedy_actions = q_all.argmax(dim=1).numpy()
+            actions[greedy_idx] = greedy_actions
+
+        return actions
 
 
 def _train_step(

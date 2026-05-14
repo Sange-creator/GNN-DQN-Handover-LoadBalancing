@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GNN-DQN Driven Predictive Handover · IOE Paschimanchal Campus</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b73bd'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial' font-size='20' font-weight='700' fill='white'%3EGNN%3C/text%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
+
+<link rel="stylesheet" href="styles.css">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<a href="#top" class="skip-link">Skip to content</a>
+
+<header class="site-header" id="top">
+  <div class="header-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="2.5" fill="currentColor"/>
+          <circle cx="4" cy="6" r="1.6" fill="currentColor" opacity="0.55"/>
+          <circle cx="20" cy="6" r="1.6" fill="currentColor" opacity="0.55"/>
+          <circle cx="4" cy="18" r="1.6" fill="currentColor" opacity="0.55"/>
+          <circle cx="20" cy="18" r="1.6" fill="currentColor" opacity="0.55"/>
+          <path d="M12 12 L4 6 M12 12 L20 6 M12 12 L4 18 M12 12 L20 18" stroke="currentColor" stroke-width="0.8" opacity="0.45"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-name">GNN-DQN · Predictive Handover</span>
+        <span class="brand-sub">IOE Paschimanchal Campus · Major Project</span>
+      </span>
+    </a>
+
+    <nav class="primary-nav" aria-label="Primary">
+      <a href="#abstract">Abstract</a>
+      <a href="#problem">Problem</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#atlas">Scenarios</a>
+      <a href="#lab">Live Lab</a>
+      <a href="#results">Results</a>
+      <a href="#generalization">Generalization</a>
+      <a href="#methods">Methods</a>
+      <a href="#reproduce">Reproduce</a>
+    </nav>
+
+    <div class="header-meta">
+      <span class="status-dot" aria-hidden="true" style="background: oklch(0.6 0.13 155); box-shadow: 0 0 0 3px oklch(0.6 0.13 155 / 0.25);"></span>
+      <span class="status-text">Evaluation complete · 20 seeds</span>
+    </div>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-col">
+      <div class="footer-title">Major Project</div>
+      <p class="footer-blurb">GNN-DQN Driven Predictive Handover and Load Optimization for LTE Networks. Topology-invariant relational reinforcement learning with a safety-bounded SON translation layer.</p>
+      <p class="footer-blurb" style="margin-top: 10px;">Tribhuvan University · Institute of Engineering · Paschimanchal Campus · Lamachaur, Pokhara-16 · Department of Electronics and Computer Engineering.</p>
+    </div>
+    <div class="footer-col">
+      <div class="footer-title">Artifacts</div>
+      <ul>
+        <li><a href="#reproduce">Source code</a></li>
+        <li><a href="#reproduce">Training configs</a></li>
+        <li><a href="#results">Evaluation data</a></li>
+        <li><a href="#methods">Feature profiles</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <div class="footer-title">Submitted by</div>
+      <ul>
+        <li>Rojin Puri · PAS078BEI028</li>
+        <li>Rujan Subedi · PAS078BEI030</li>
+        <li>Saange Tamang · PAS078BEI031</li>
+        <li>Sulav Kandel · PAS078BEI041</li>
+      </ul>
+    </div>
+    <div class="footer-col footer-col--cite">
+      <div class="footer-title">Cite</div>
+      <pre class="footer-cite">@misc{gnn_dqn_handover_2026,
+  title   = {GNN-DQN Driven Predictive
+             Handover and Load Optimization
+             for LTE Networks},
+  author  = {Puri, R. and Subedi, R. and
+             Tamang, S. and Kandel, S.},
+  school  = {Tribhuvan University,
+             IOE Paschimanchal Campus},
+  year    = {2026},
+  type    = {Major Project Proposal}
+}</pre>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2026 · Research artifact</span>
+    <span>Built with React, SVG, and Canvas. No tracking.</span>
+  </div>
+</footer>
+
+<!-- Data layer -->
+<script type="text/babel" src="data/scenarios.js"></script>
+<script type="text/babel" src="data/topology.js"></script>
+<script type="text/babel" src="data/results.js"></script>
+
+<!-- Components -->
+<script type="text/babel" src="components/primitives.jsx"></script>
+<script type="text/babel" src="components/sections.jsx"></script>
+<script type="text/babel" src="components/architecture.jsx"></script>
+<script type="text/babel" src="components/atlas.jsx"></script>
+<script type="text/babel" src="components/sim-engine.jsx"></script>
+<script type="text/babel" src="components/lab.jsx"></script>
+<script type="text/babel" src="components/results.jsx"></script>
+<script type="text/babel" src="components/closing.jsx"></script>
+<script type="text/babel" src="components/main.jsx"></script>
+
+</body>
+</html>

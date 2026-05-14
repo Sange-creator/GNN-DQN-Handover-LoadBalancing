@@ -1,0 +1,79 @@
+{
+  "run_name": "smoke_oran_e2",
+  "out_dir": "results/runs/smoke_oran_e2",
+  "feature_mode": "oran_e2",
+  "prb_available": true,
+  "seed": 42,
+  "episodes": 8,
+  "steps_per_episode": 20,
+  "steps_per_episode_curriculum": {
+    "phase1_episodes": 3,
+    "phase1_steps": 10,
+    "phase2_episodes": 6,
+    "phase2_steps": 15,
+    "phase3_steps": 20
+  },
+  "behavioral_clone_episodes": 2,
+  "eval_seeds": 0,
+  "log_every_episodes": 1,
+  "checkpoint_every_episodes": 4,
+  "checkpoint_include_replay": false,
+  "validation_scenarios": [
+    "overloaded_event"
+  ],
+  "validation_seeds": 2,
+  "validate_every_episodes": 4,
+  "validation_steps": 10,
+  "validation_ue_cap": 24,
+  "validation_steps_override": 8,
+  "son_config": {
+    "update_interval_steps": 4,
+    "cio_min_db": -8.0,
+    "cio_max_db": 8.0,
+    "max_cio_step_db": 1.2,
+    "base_a3_offset_db": 2.0,
+    "base_ttt_steps": 2,
+    "max_ttt_steps": 8,
+    "min_ttt_steps": 1,
+    "preference_threshold": 0.04,
+    "load_proxy_overload_threshold": 0.70,
+    "max_updates_per_cycle": 24,
+    "rollback_throughput_drop_frac": 0.12,
+    "rollback_pingpong_increase_frac": 0.30,
+    "load_signal": "true_prb"
+  },
+  "train_scenarios": [
+    "dense_urban",
+    "overloaded_event"
+  ],
+  "test_scenarios": [
+    "kathmandu_real"
+  ],
+  "training_ue_caps": {
+    "dense_urban": 40,
+    "overloaded_event": 40
+  },
+  "dqn": {
+    "hidden_dim": 64,
+    "dropout": 0.06,
+    "gamma": 0.97,
+    "learning_rate": 0.0004,
+    "batch_size": 64,
+    "replay_capacity": 6000,
+    "train_every": 4,
+    "target_update_every": 200,
+    "tau": 0.005,
+    "grad_clip": 1.0,
+    "lr_min": 5e-6,
+    "weight_decay": 1e-5,
+    "epsilon_start": 0.5,
+    "epsilon_end": 0.05,
+    "epsilon_decay_episodes": 6,
+    "dueling": true,
+    "double_dqn": true,
+    "n_step": 3,
+    "per_alpha": 0.6,
+    "per_beta_start": 0.4,
+    "per_beta_end": 1.0
+  }
+}
