@@ -19,13 +19,9 @@ graphify-out/
 *.csv
 
 # ---------------------------------------------------
-# Documentation & Private Thesis Writing (IGNORE)
+# Documentation & Private Thesis Writing
 # ---------------------------------------------------
-docs/
 final_report/
-*.pdf
-*.docx
-*.tex
 *.bib
 *.out
 *.log

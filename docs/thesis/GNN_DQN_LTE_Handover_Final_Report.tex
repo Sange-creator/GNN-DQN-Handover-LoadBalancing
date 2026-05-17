@@ -1,0 +1,1330 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[left=1.25in,right=1in,top=1in,bottom=1in]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{url}
+
+\onehalfspacing
+\setlength{\parindent}{0.35in}
+\setlength{\parskip}{0.25em}
+\setlist[itemize]{noitemsep,topsep=0.25em}
+\setlist[enumerate]{noitemsep,topsep=0.25em}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue,
+    citecolor=black
+}
+
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\lstdefinestyle{codestyle}{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny,
+    tabsize=2,
+    showstringspaces=false
+}
+\lstset{style=codestyle}
+
+\newcommand{\projecttitle}{GNN-DQN Based Handover Optimization and Load Balancing for LTE Networks}
+\newcommand{\method}{\texttt{son\_gnn\_dqn}}
+\newcommand{\rawmethod}{\texttt{gnn\_dqn}}
+\newcommand{\ueonly}{\texttt{ue\_only}}
+\newcommand{\orane}{\texttt{oran\_e2}}
+\newcommand{\placeholder}[2]{
+\begin{figure}[H]
+\centering
+\fbox{
+\begin{minipage}[c][0.23\textheight][c]{0.88\textwidth}
+\centering
+\vspace{0.4cm}
+\textbf{Image Placeholder}\\[0.35cm]
+#1\\[0.25cm]
+\small #2
+\vspace{0.4cm}
+\end{minipage}}
+\caption{#1}
+\end{figure}
+}
+
+\begin{document}
+
+\pagenumbering{roman}
+
+\begin{titlepage}
+\centering
+\vspace*{0.5cm}
+{\Large \textbf{TRIBHUVAN UNIVERSITY}}\\
+{\large Institute of Engineering}\\
+{\large Paschimanchal Campus}\\
+{\large Department of Electronics and Computer Engineering}\\[1.2cm]
+
+{\Large \textbf{A Major Project Report On}}\\[0.4cm]
+{\huge \textbf{\projecttitle}}\\[0.6cm]
+{\large \textbf{Final Year Engineering Project Report}}\\[1.2cm]
+
+\textbf{Submitted By}\\[0.2cm]
+\begin{tabular}{ll}
+Rojin Puri & PAS078BEI028\\
+Rujan Subedi & PAS078BEI030\\
+Saange Tamang & PAS078BEI031\\
+Sulav Kandel & PAS078BEI041\\
+\end{tabular}\\[1.0cm]
+
+\textbf{Submitted To}\\[0.2cm]
+Department of Electronics and Computer Engineering\\
+Paschimanchal Campus, Lamachaur, Pokhara-16, Nepal\\[0.8cm]
+
+\textbf{Supervisor}\\[0.2cm]
+Asst. Prof. Er. Hom Nath Tiwari\\[1.0cm]
+
+\vfill
+{\large May 2026}
+\end{titlepage}
+
+\chapter*{Declaration}
+We hereby declare that this report entitled ``\projecttitle'' is our original work carried out as a final year engineering project under the supervision of Asst. Prof. Er. Hom Nath Tiwari. The work presented in this report has not been submitted elsewhere for the award of any degree. All external sources, standards, datasets, and software libraries used during the project have been acknowledged appropriately.
+
+\vspace{1.0cm}
+\begin{tabularx}{\textwidth}{Y Y}
+\textbf{Student Name and Roll No.} & \textbf{Signature}\\[0.4cm]
+Rojin Puri, PAS078BEI028 & \hrulefill\\[0.5cm]
+Rujan Subedi, PAS078BEI030 & \hrulefill\\[0.5cm]
+Saange Tamang, PAS078BEI031 & \hrulefill\\[0.5cm]
+Sulav Kandel, PAS078BEI041 & \hrulefill\\
+\end{tabularx}
+
+\chapter*{Recommendation}
+This is to certify that the major project report entitled ``\projecttitle'' has been prepared by Rojin Puri, Rujan Subedi, Saange Tamang, and Sulav Kandel under my supervision. The report is recommended for evaluation as the final year project report for the Bachelor in Electronics, Communication and Information Engineering program.
+
+\vspace{1.5cm}
+\begin{tabularx}{\textwidth}{Y Y}
+\textbf{Supervisor} & \textbf{Date}\\[0.7cm]
+\hrulefill & \hrulefill\\
+Asst. Prof. Er. Hom Nath Tiwari & \\
+\end{tabularx}
+
+\chapter*{Acknowledgement}
+We express our sincere gratitude to the Department of Electronics and Computer Engineering, Paschimanchal Campus, for providing the academic environment and guidance required to complete this project. We are deeply thankful to our supervisor, Asst. Prof. Er. Hom Nath Tiwari, for his continuous support, technical feedback, and encouragement throughout the project.
+
+We also acknowledge the open-source scientific computing ecosystem, including Python, PyTorch, PyTorch Geometric, NumPy, pandas, matplotlib, and scikit-learn, which made the implementation and validation of this work possible. Finally, we thank our friends, families, and everyone who supported the drive-test data collection and report preparation process.
+
+\chapter*{Abstract}
+LTE handover control directly affects user experience, especially in dense urban areas, highway corridors, and overloaded event locations where signal strength, interference, cell load, and mobility change rapidly. Conventional LTE handover is primarily driven by A3 event rules, hysteresis, cell individual offset, and time-to-trigger parameters. These mechanisms are standardized and deployable, but fixed or manually tuned parameters can produce late handovers, sticky-cell behavior, load imbalance, and unnecessary ping-pong handovers.
+
+This project proposes a SON-compatible Graph Neural Network and Deep Q-Network framework for LTE handover optimization and load balancing. The final deployable method is \method: a topology-generalized GNN-DQN learns per-UE handover preferences from UE-observable features, and a safety-bounded Self-Organizing Network layer translates these learned preferences into standard LTE-style A3, CIO, and TTT parameter behavior. The primary feature profile is \ueonly, using measurements available from UE reports and drive tests, including RSRP, RSRQ, SINR/SNR, neighbor margin, speed, serving-cell indicator, and an RSRQ-derived load/interference proxy. The project explicitly does not require real PRB utilization in its main path; missing PRB data in drive tests is represented as unavailable, and RSRQ is treated only as a proxy rather than true scheduler load.
+
+The work includes a reusable Python package, a calibrated LTE simulation environment, graph-based DQN agents, baseline policies, a SON controller, training and evaluation scripts, and a real-world Pokhara LTE drive-test validation package. The drive-test campaign collected 4,231 UE measurements at 1 Hz across six route segments in Pokhara, Nepal. Analysis found eight observed handovers, three late handovers, approximately 25 sustained A3 trigger windows, and a severe sticky-cell case where RSRP dropped to -107 dBm without handover. Independent feature validation using a gradient-boosted classifier achieved ROC-AUC 0.978 for future cell-change prediction using UE-only features, confirming that the selected measurements contain predictive information for handover timing.
+
+Simulation results show that raw \rawmethod{} can discover useful congestion and proactive handover behavior, but can also become unsafe in highway and unseen-topology cases. Wrapping the learned preference model with the SON safety layer stabilizes the output: in a six-scenario 30-seed evaluation, \method{} remains within -0.27\% average throughput margin relative to A3-TTT while keeping mean ping-pong rate near 0.09\% and avoiding outage in normal scenarios. The conclusion is that the strongest defendable contribution is not an unconstrained AI handover replacement, but a practical SON-compatible framework that uses GNN-DQN intelligence inside bounded LTE control rules.
+
+\textbf{Keywords:} LTE handover, load balancing, graph neural network, deep Q-network, SON, A3 event, CIO, TTT, RSRP, RSRQ, drive-test validation.
+
+\chapter*{List of Abbreviations}
+\begin{longtable}{ll}
+\toprule
+\textbf{Abbreviation} & \textbf{Meaning}\\
+\midrule
+3GPP & Third Generation Partnership Project\\
+A3 & LTE measurement event where a neighbor becomes better than serving cell by offset\\
+ADB & Android Debug Bridge\\
+AI & Artificial Intelligence\\
+CIO & Cell Individual Offset\\
+CSI & Channel State Information\\
+DQN & Deep Q-Network\\
+DRL & Deep Reinforcement Learning\\
+E2 & O-RAN near-real-time RIC interface\\
+eNodeB/eNB & LTE base station\\
+GCN & Graph Convolutional Network\\
+GNN & Graph Neural Network\\
+HO & Handover\\
+KPI & Key Performance Indicator\\
+LTE & Long Term Evolution\\
+MLB & Mobility Load Balancing\\
+PCI & Physical Cell Identity\\
+PER & Prioritized Experience Replay\\
+PRB & Physical Resource Block\\
+RL & Reinforcement Learning\\
+RSRP & Reference Signal Received Power\\
+RSRQ & Reference Signal Received Quality\\
+SINR/SNR & Signal-to-Interference-plus-Noise Ratio / Signal-to-Noise Ratio\\
+SON & Self-Organizing Network\\
+TTT & Time To Trigger\\
+UE & User Equipment\\
+\bottomrule
+\end{longtable}
+
+\tableofcontents
+\listoffigures
+\listoftables
+\clearpage
+\pagenumbering{arabic}
+
+\chapter{Introduction}
+
+\section{Background}
+Mobility management is one of the central responsibilities of a cellular radio access network. A user equipment must remain connected while moving across coverage areas, and the network must decide when that UE should be transferred from the current serving cell to a target cell. In LTE, this transfer is called handover. A handover decision is usually driven by measurement reports such as Reference Signal Received Power (RSRP), Reference Signal Received Quality (RSRQ), hysteresis, cell individual offset (CIO), and time-to-trigger (TTT). These parameters are standardized and operationally safe, but they are also difficult to tune under changing topology, mobility, and load conditions.
+
+The problem becomes more visible in cities and highways. A dense urban area may contain many overlapping cells with uneven load. A highway user may move quickly from one coverage area to another, creating a risk of late handover and call drop. An event area may suddenly concentrate many UEs into a few cells, requiring load-balancing handovers even when the strongest signal still belongs to a congested cell. These cases show why the handover problem is not simply a strongest-signal selection problem. A good handover decision must jointly consider radio quality, mobility, interference, candidate-cell availability, and cell load.
+
+Machine learning can help because these factors interact non-linearly. However, direct replacement of standardized handover control by a black-box neural network is not realistic for a final deployable LTE design. A mobile operator needs bounded parameter updates, compatibility with existing SON logic, predictable rollback behavior, and a clear explanation of what information the model uses. This project therefore uses a hybrid design: a GNN-DQN learns handover preferences, while a SON layer translates those preferences into constrained LTE-style handover parameter behavior.
+
+\section{Problem Statement}
+Traditional LTE handover mechanisms are robust but not always adaptive enough for heterogeneous real-world conditions. Fixed A3 offset and TTT settings can lead to the following problems:
+
+\begin{itemize}
+    \item \textbf{Late handover:} the UE stays attached to the current serving cell until RSRP becomes very weak, increasing outage and call-drop risk.
+    \item \textbf{Sticky-cell behavior:} the network ignores sustained better-neighbor opportunities, especially when parameter thresholds or mobility assumptions are conservative.
+    \item \textbf{Ping-pong handover:} the UE moves repeatedly between cells due to short-term fading or unstable neighbor ranking.
+    \item \textbf{Load imbalance:} the strongest RSRP cell may be overloaded while a slightly weaker neighbor can provide higher user throughput.
+    \item \textbf{Topology-specific tuning:} handover rules tuned for one cell layout may not transfer to a different city, highway, or sparse rural topology.
+\end{itemize}
+
+The project addresses these limitations with a graph-based reinforcement learning framework that can represent variable network topologies and learn candidate-cell preferences from UE-observable measurements. The learned model is then constrained by a SON controller so that the final behavior remains compatible with LTE handover control practice.
+
+\section{Single Project Objective}
+The single objective of this project is:
+
+\begin{quote}
+\textbf{To design, implement, and validate a UE-observable, topology-generalized GNN-DQN framework that learns per-UE handover preferences and converts them through a safety-bounded SON layer into standard LTE A3/CIO/TTT-style updates for improved handover stability and load balancing.}
+\end{quote}
+
+This objective deliberately combines intelligence and deployability. The project is not framed as a live O-RAN xApp, and it is not framed as a direct neural replacement for all LTE mobility logic. The final claim is a SON-compatible optimization framework where the GNN-DQN provides learned preference signals and the SON layer provides safety, interpretability, and bounded action.
+
+\section{Scope}
+The scope of the project includes simulation, implementation, evaluation, and drive-test validation support for LTE handover optimization. The main implementation path uses the \ueonly{} feature profile. It can be trained and evaluated using measurements that are observable from UE reports and drive-test logs. The project also includes an \orane{} profile as a future extension or demonstration path, but it is not the main thesis result.
+
+The primary scope includes:
+\begin{itemize}
+    \item LTE-style cellular simulation with RSRP, RSRQ, SINR, mobility, handover history, and load-aware throughput metrics.
+    \item Graph construction from cell topology, including synthetic hexagonal layouts, highway layouts, OpenCellID-style real positions, and unseen test topologies.
+    \item GNN-DQN implementation with Double DQN, Dueling DQN, n-step returns, prioritized replay support, target networks, and checkpoint metadata validation.
+    \item Baseline policies: no handover, random valid handover, strongest RSRP, A3-TTT, load-aware heuristic, raw GNN-DQN, and SON-wrapped GNN-DQN.
+    \item Real Pokhara LTE drive-test analysis for dataset statistics, signal calibration, handover event analysis, and UE-only feature validation.
+\end{itemize}
+
+The project does not claim real-time deployment in a commercial LTE network. It does not claim access to true PRB utilization in the main drive-test path. It also does not claim that RSRQ is equal to PRB utilization. Instead, RSRQ is used as a UE-observable load and interference proxy.
+
+\section{Main Contributions}
+The project makes the following contributions:
+
+\begin{itemize}
+    \item A complete Python codebase for GNN-DQN based LTE handover and load-balancing research, using a reusable package under \path{src/handover_gnn_dqn}.
+    \item A topology-generalized graph representation where cells are nodes and physical proximity defines graph edges, allowing evaluation on different numbers of cells.
+    \item A UE-only feature profile aligned with drive-test data and commercial measurement-report availability.
+    \item A safety-bounded SON controller that converts learned preferences into CIO/TTT-style behavior with bounded CIO range, update intervals, overload checks, and rollback logic.
+    \item A drive-test validation package based on 4,231 real LTE measurements collected in Pokhara, Nepal.
+    \item A defensible final interpretation: raw GNN-DQN is useful as a learned preference model, while \method{} is the deployable method because it preserves LTE safety constraints.
+\end{itemize}
+
+\section{Report Organization}
+Chapter 2 presents LTE handover theory, SON, reinforcement learning, DQN, and GNN background. Chapter 3 describes system requirements and design. Chapter 4 explains the implementation methodology, simulator, model, reward, training, and fine-tuning process. Chapter 5 presents drive-test calibration and validation. Chapter 6 presents simulation results and discussion. Chapter 7 covers testing, reproducibility, and engineering quality. Chapter 8 concludes the report and identifies future work.
+
+\chapter{Literature Review and Theoretical Background}
+
+\section{LTE Handover Fundamentals}
+LTE handover enables a UE to maintain connectivity while moving between eNodeB coverage areas. In connected mode, the UE measures serving and neighbor cells and sends measurement reports when configured events are satisfied. The network then decides whether to execute handover based on radio measurements, hysteresis, time-to-trigger, mobility state, and operator policy.
+
+One of the most common LTE measurement events is A3. In simplified form, an A3 event is satisfied when:
+\begin{equation}
+    RSRP_{\text{neighbor}} + CIO_{\text{neighbor}} > RSRP_{\text{serving}} + H_{\text{A3}},
+\end{equation}
+for at least a configured TTT duration. Here, $H_{\text{A3}}$ is the A3 offset or hysteresis threshold. CIO biases the handover decision toward or away from a particular cell. TTT filters short fading events and prevents immediate reaction to transient measurement changes.
+
+A3 is attractive because it is simple and standardized. However, it is not inherently load-aware or topology-generalized. A fixed A3 offset can be too conservative in a highway coverage boundary, too aggressive in a fading-rich dense urban environment, and insufficient during cell overload.
+
+\section{Handover Failure Modes}
+The project focuses on four practical handover failure modes.
+
+\textbf{Late handover} occurs when a UE remains on the serving cell after a neighbor has become a better candidate. In highway movement, late handover can quickly become outage because the channel degrades rapidly.
+
+\textbf{Sticky-cell behavior} occurs when the UE remains attached to a cell despite sustained measurements favoring another cell. It is often caused by conservative offsets, large TTT, mobility-state mismatch, or incomplete neighbor relation behavior.
+
+\textbf{Ping-pong handover} occurs when the UE repeatedly switches between cells within a short time window. This increases signaling overhead and may degrade user experience.
+
+\textbf{Load-blind handover} occurs when a policy chooses the best radio signal without considering whether the target cell is congested. In a throughput-limited environment, a slightly weaker but less loaded cell may be the better target.
+
+\section{Radio Measurements Used in This Project}
+The UE-only state representation uses measurements that are realistic for drive-test and UE-report based analysis. The major measurements are:
+
+\begin{itemize}
+    \item \textbf{RSRP:} received power of LTE reference signals; useful for coverage and candidate-cell ranking.
+    \item \textbf{RSRQ:} reference signal received quality; affected by received signal strength, interference, and network loading.
+    \item \textbf{SINR/SNR:} signal quality indicator used for throughput and link-quality estimation.
+    \item \textbf{Neighbor margin:} difference between the best neighbor and serving-cell signal; important for A3-like reasoning.
+    \item \textbf{UE speed:} mobility context used to distinguish stationary, urban, and highway regimes.
+    \item \textbf{Serving-cell indicator:} identifies the currently attached cell in the candidate matrix.
+\end{itemize}
+
+In the project code, UE-only mode does not include true PRB utilization. Missing PRB values are represented as unavailable. RSRQ-derived load is used only as a proxy signal, not as a claim of measured PRB scheduler utilization.
+
+\section{Self-Organizing Networks}
+SON functions automate network configuration and optimization tasks. In LTE, SON can tune parameters such as CIO, handover margin, TTT, and neighbor relations. Mobility load balancing is one SON function where CIO is adjusted to shift traffic away from overloaded cells. Mobility robustness optimization is another function where handover parameters are adapted to reduce radio link failures, late handovers, and ping-pong behavior.
+
+This project uses SON as the deployment bridge between learned model preferences and standardized control. The neural model produces a target-cell preference, while the SON controller decides whether and how to apply bounded CIO and TTT changes. This hybrid structure reduces risk because the final action remains a parameter update rather than an unconstrained direct handover command.
+
+\section{Deep Reinforcement Learning for Handover}
+Reinforcement learning models sequential decision making. An agent observes a state $s_t$, takes an action $a_t$, receives a reward $r_t$, and transitions to a next state $s_{t+1}$. The goal is to learn a policy that maximizes discounted return:
+\begin{equation}
+    G_t = \sum_{k=0}^{\infty} \gamma^k r_{t+k+1},
+\end{equation}
+where $\gamma$ is the discount factor.
+
+A DQN approximates the action-value function:
+\begin{equation}
+    Q(s,a;\theta) \approx \mathbb{E}[G_t \mid s_t=s, a_t=a].
+\end{equation}
+The standard DQN target is:
+\begin{equation}
+    y_t = r_t + \gamma \max_{a'} Q(s_{t+1},a';\theta^-),
+\end{equation}
+where $\theta^-$ denotes the target network parameters. This project uses modern DQN improvements such as Double DQN, Dueling DQN, n-step returns, replay buffers, and target-network updates.
+
+For handover, the action is the target cell or the decision to remain on the current serving cell. The reward should reflect not only immediate throughput but also fairness, outage, ping-pong risk, and stability. This makes the problem suitable for reinforcement learning because a handover decision can have delayed consequences.
+
+\section{Why Graph Neural Networks}
+Cellular networks are naturally graph-structured. Each cell has neighbor cells; each UE compares serving and candidate cells; and topology affects whether a handover is physically meaningful. A standard fully connected neural network often assumes a fixed input size and fixed cell ordering. That makes it difficult to train on one topology and evaluate on another topology with a different number of cells.
+
+A GNN processes node features and edge relationships. In this project, each cell is represented as a node and candidate-cell features are stored in a node feature matrix. Edges connect nearby cells. Graph message passing allows the model to learn relational patterns such as ``a neighbor with slightly weaker signal but better quality and lower congestion may be a good target.'' Because the same graph layers can run on different graph sizes, the model supports topology generalization.
+
+\placeholder{GNN Message Passing for LTE Cell Graph}{Insert a figure showing eNodeB cells as graph nodes, neighbor edges, UE feature matrix, graph convolution layers, and final per-cell Q-values.}
+
+\section{Prior Work Positioning}
+Existing research on AI-based handover often focuses on direct neural decision making, supervised handover prediction, Q-learning with fixed topologies, or network-side optimization using detailed base-station telemetry. These directions are valuable, but the final-year engineering requirement demands a design that can be explained, implemented, validated, and defended with available data.
+
+The distinguishing position of this project is the combination of:
+\begin{itemize}
+    \item UE-observable input features, aligned with drive-test availability.
+    \item Graph-based topology generalization, avoiding fixed-size cell assumptions.
+    \item Reinforcement learning for sequential handover consequences.
+    \item SON-compatible bounded output, avoiding unsafe direct neural control.
+    \item Real Pokhara drive-test validation for signal statistics, mobility regimes, and feature relevance.
+\end{itemize}
+
+\chapter{System Requirements and Design}
+
+\section{Functional Requirements}
+The system must satisfy the following functional requirements:
+
+\begin{longtable}{p{0.16\textwidth}p{0.74\textwidth}}
+\toprule
+\textbf{ID} & \textbf{Requirement}\\
+\midrule
+FR1 & Simulate LTE handover decisions across multiple cell topologies, mobility patterns, and load conditions.\\
+FR2 & Represent the network as a graph of cells with node features derived from UE-observable measurements.\\
+FR3 & Train a GNN-DQN agent to score candidate target cells for each UE.\\
+FR4 & Evaluate against no handover, random valid handover, strongest RSRP, A3-TTT, load-aware heuristic, raw GNN-DQN, and SON-GNN-DQN.\\
+FR5 & Convert learned preferences into bounded SON-style CIO and TTT behavior rather than unconstrained direct control.\\
+FR6 & Support checkpoint save, resume, and metadata validation to prevent incompatible feature-profile reuse.\\
+FR7 & Use real drive-test data for signal statistics, calibration, and feature-validation evidence.\\
+\bottomrule
+\end{longtable}
+
+\section{Non-Functional Requirements}
+\begin{itemize}
+    \item \textbf{Deployability:} the final method must be compatible with LTE SON logic and standard A3/CIO/TTT concepts.
+    \item \textbf{Safety:} actions must be bounded; invalid handover targets must be masked; ping-pong risk must be penalized.
+    \item \textbf{Reproducibility:} experiments must be config-driven and seeded where possible.
+    \item \textbf{Generalization:} the GNN should support different numbers of cells and unseen topology layouts.
+    \item \textbf{Honesty of telemetry:} RSRQ proxy must not be described as true PRB utilization.
+    \item \textbf{Understandability:} the final report and defense must explain the model in LTE engineering terms, not only AI terminology.
+\end{itemize}
+
+\section{High-Level Architecture}
+The project architecture has four main layers:
+
+\begin{enumerate}
+    \item \textbf{LTE environment layer:} simulates cell topology, UE mobility, signal quality, load, handover transitions, and KPI collection.
+    \item \textbf{Feature and graph layer:} builds a per-UE cell feature matrix and cell adjacency graph.
+    \item \textbf{GNN-DQN learning layer:} computes per-cell Q-values and learns from replayed transitions.
+    \item \textbf{SON deployment layer:} translates learned preference signals into bounded A3/CIO/TTT behavior.
+\end{enumerate}
+
+\placeholder{Overall SON-GNN-DQN System Architecture}{Insert a block diagram with LTE simulator or drive-test input, UE-only feature builder, graph encoder, DQN head, SON controller, and evaluated KPI outputs.}
+
+\section{Feature Profiles}
+The codebase supports two feature profiles. The main thesis path is \ueonly. The \orane{} profile is retained for future work and demonstration.
+
+\begin{table}[H]
+\centering
+\caption{Feature profile decision}
+\begin{tabularx}{\textwidth}{p{0.18\textwidth}Y Y}
+\toprule
+\textbf{Profile} & \textbf{Meaning} & \textbf{Thesis Use}\\
+\midrule
+\ueonly & Uses UE-observable measurements such as RSRP, RSRQ, SINR/SNR, speed, serving-cell indicator, and neighbor relations. PRB is unavailable. & Primary training, evaluation, drive-test, and report path.\\
+\orane & Extends the state with fields such as PRB utilization and PRB availability for O-RAN/E2-style telemetry. & Future-work/demo path only; not the main headline claim.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+This choice is important for defense. A final-year project can defend the \ueonly{} profile with real drive-test evidence. A true O-RAN deployment would require RIC integration, E2SM telemetry, scheduler counters, and operator access, which are outside the current project scope.
+
+\section{Graph Representation}
+For each UE decision step, the model receives a graph where each cell is a node. Node features describe how the current UE sees each candidate cell. Edges are built from physical cell positions using nearest-neighbor adjacency. This allows the same model to process 7-cell rural layouts, 10-cell highway layouts, 20-cell Pokhara layouts, 25-cell Kathmandu layouts, and other unseen topologies.
+
+The adjacency builder computes pairwise distances between cells, connects each cell to its nearest neighbors, and uses distance-weighted edges. The graph is symmetric and excludes self-loops at the adjacency-building stage because the graph convolution implementation can handle self-loop behavior internally.
+
+\section{SON Controller Design}
+The SON controller is the safety layer. It receives learned target-cell preferences and updates CIO/TTT behavior under constraints. Key design choices include:
+
+\begin{itemize}
+    \item CIO lower and upper bounds: -6 dB to +6 dB.
+    \item Maximum CIO step per update cycle: 1 dB.
+    \item Update interval: configured in steps, preventing continuous oscillation.
+    \item TTT bounds: minimum and maximum step values to reduce ping-pong and late handover.
+    \item Load signal mode: RSRQ-derived proxy for \ueonly{} and true PRB only for future/demo mode.
+    \item Rollback checks: avoid accepting updates that degrade throughput or increase ping-pong beyond thresholds.
+\end{itemize}
+
+The final deployable action is therefore not ``the neural network forces a handover.'' It is ``the SON layer uses the neural preference signal to tune standard handover biases within safe limits.''
+
+\placeholder{SON Safety-Bounded Control Loop}{Insert a figure showing GNN preference, overload/stability checks, bounded CIO update, TTT adaptation, A3 trigger, and rollback.}
+
+\section{What the Framework Can Eliminate or Reduce}
+The complete design targets the following practical failures:
+
+\begin{itemize}
+    \item It can reduce late handover by learning speed-aware and trend-aware candidate preference.
+    \item It can reduce sticky-cell behavior by recognizing sustained neighbor advantage and coverage degradation.
+    \item It can reduce ping-pong by using TTT, hysteresis, ping-pong penalties, and bounded SON updates.
+    \item It can reduce unsafe raw neural actions by keeping learned preferences inside SON constraints.
+    \item It can reduce topology-specific overfitting by using graph message passing rather than a fixed flat input vector.
+    \item It can reduce load imbalance in congestion scenarios by incorporating RSRQ-derived load/interference proxy and load-aware reward components.
+\end{itemize}
+
+The system cannot eliminate all radio failures. It cannot create coverage where no candidate cell exists, cannot guarantee live-network performance without operator integration, and cannot infer true PRB scheduler utilization from RSRQ alone.
+
+\chapter{Methodology and Implementation}
+
+\section{Codebase Overview}
+The current codebase is organized as a reusable Python package with config-driven scripts and documentation. The important directories are:
+
+\begin{longtable}{p{0.30\textwidth}p{0.60\textwidth}}
+\toprule
+\textbf{Path} & \textbf{Purpose}\\
+\midrule
+\path{configs/experiments/} & JSON experiment configurations for smoke, diagnostic, multiscenario, and fine-tuned runs.\\
+\path{data/raw/} & Raw OpenCellID, ns-3, and drive-test input data.\\
+\path{data/processed/} & Generated and cleaned data, including the augmented Pokhara drive-test CSV.\\
+\path{docs/} & Guides, thesis notes, defense documents, and generated report material.\\
+\path{scripts/train.py} & Config-driven training entrypoint.\\
+\path{scripts/evaluate.py} & Checkpoint evaluation entrypoint.\\
+\path{scripts/prepare_drive_data.py} & Drive-test shadow inference and feature processing support.\\
+\path{scripts/replay_drivetest.py} & Drive-test replay support.\\
+\path{src/handover_gnn_dqn/} & Main package code for environment, topology, models, policies, SON controller, and metrics.\\
+\path{tests/} & Unit and integration tests for simulator, policies, model, SON, and data-processing behavior.\\
+\path{results/runs/} & Generated training and evaluation outputs.\\
+\bottomrule
+\end{longtable}
+
+\section{Environment Model}
+The LTE simulation environment is implemented in \path{src/handover_gnn_dqn/env/simulator.py}. It models cell positions, UE positions, UE mobility, signal quality, handover decisions, load effects, and KPI tracking. The environment supports both synthetic and real-style topologies.
+
+At each simulation step, the environment computes:
+\begin{itemize}
+    \item RSRP for serving and candidate cells.
+    \item RSRQ and an RSRQ-derived load/interference proxy.
+    \item SINR or SNR-like quality terms.
+    \item UE speed and mobility context.
+    \item Valid candidate-cell masks.
+    \item Throughput estimates based on signal quality and load sharing.
+    \item Handover count, ping-pong risk, outage, and reward.
+\end{itemize}
+
+The environment includes highway road-corridor mobility, event-clustered mobility, coordinate normalization for real and synthetic layouts, and reward timing based on pre-action handover history. These details matter because handover is a temporal problem. A decision that looks good in one instant can become unstable over the next few seconds.
+
+\section{Topology Generation}
+Topology scenarios are implemented in \path{src/handover_gnn_dqn/topology/scenarios.py}. The training set includes dense urban, highway, highway-fast, suburban, sparse rural, overloaded event, real Pokhara, and Pokhara peak-hour scenarios. The test set includes Kathmandu real, Dharan synthetic, unknown hexagonal grid, and coverage-hole scenarios.
+
+\begin{table}[H]
+\centering
+\caption{Representative scenario design}
+\begin{tabularx}{\textwidth}{p{0.22\textwidth}p{0.12\textwidth}p{0.14\textwidth}Y}
+\toprule
+\textbf{Scenario} & \textbf{Cells} & \textbf{Mobility} & \textbf{Purpose}\\
+\midrule
+Dense urban & 20 & Mixed & Tests dense overlapping coverage and load distribution.\\
+Highway & 10 & 15--28 m/s & Tests fast mobility and late-handover risk.\\
+Highway fast & 12 & 22--33 m/s & Tests very fast mobility and proactive handover.\\
+Overloaded event & 12 & Mostly static & Tests congestion and load-balancing pressure.\\
+Real Pokhara & 20 & Mixed & Uses real-style Pokhara cell positions.\\
+Kathmandu real & 25 & Mixed & Unseen dense topology for generalization.\\
+Unknown hex grid & 19 & Mixed & Tests standard unseen topology structure.\\
+Coverage hole & 8 & Mixed & Tests stability when no candidate is strong.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{UE-Only State Matrix}
+For a given UE, the state is represented as a matrix:
+\begin{equation}
+    X_t \in \mathbb{R}^{N_c \times F},
+\end{equation}
+where $N_c$ is the number of candidate cells and $F=11$ for the final \ueonly{} path. Each row corresponds to a cell. The exact feature names are implemented inside the environment, but conceptually the vector includes normalized radio quality, serving-cell identity, mobility, candidate validity, and proxy load/interference information.
+
+This matrix representation is important because the model does not need a fixed city-specific list of cells. The GNN can operate over the graph regardless of whether the scenario contains 7, 10, 20, or 25 cells.
+
+\placeholder{UE-Only Feature Matrix}{Insert a table-style figure showing one UE, candidate cells as rows, and RSRP/RSRQ/SNR/speed/serving/valid/load-proxy columns.}
+
+\section{GNN-DQN Model}
+The model is implemented in \path{src/handover_gnn_dqn/models/gnn_dqn.py}. The current final configuration uses graph convolutional layers with optional GAT support in code, but the main tuned runs use \texttt{use\_gat=false}. The DQN architecture includes:
+
+\begin{itemize}
+    \item Three graph neural network layers with normalization.
+    \item A dueling value/advantage head.
+    \item Double DQN target calculation.
+    \item Dropout during training, disabled during target inference and evaluation.
+    \item Explicit graph batching, so unseen topology sizes do not depend on a fixed maximum cell count.
+    \item Invalid-action masking to avoid selecting impossible target cells.
+\end{itemize}
+
+The output is one Q-value per candidate cell. A higher Q-value means the model predicts higher long-term reward if that cell becomes the target or remains the serving cell.
+
+\section{DQN Learning Rule}
+The training loop stores transitions:
+\begin{equation}
+    (s_t, a_t, r_t, s_{t+1}, d_t),
+\end{equation}
+where $d_t$ is the terminal flag. With Double DQN, the online network chooses the next action and the target network evaluates it:
+\begin{equation}
+    a^* = \arg\max_{a'} Q_{\text{online}}(s_{t+1}, a'),
+\end{equation}
+\begin{equation}
+    y_t = r_t + \gamma Q_{\text{target}}(s_{t+1}, a^*).
+\end{equation}
+The loss is the temporal-difference error:
+\begin{equation}
+    L(\theta) = \mathbb{E}\left[(y_t - Q(s_t,a_t;\theta))^2\right].
+\end{equation}
+
+Prioritized replay gives higher sampling probability to transitions with large TD error. N-step returns improve credit assignment for delayed handover outcomes. These mechanisms are useful because the cost of a late handover or ping-pong event may appear several steps after the original decision.
+
+\section{Reward Design}
+The reward balances service quality and mobility stability. In simplified form:
+\begin{equation}
+    R = w_T T + w_F F - w_P P - w_O O - w_H H - w_I I,
+\end{equation}
+where $T$ represents throughput, $F$ represents fairness or load-balancing benefit, $P$ is ping-pong penalty, $O$ is outage penalty, $H$ is excessive handover penalty, and $I$ is invalid-action penalty. The final implementation uses a speed-aware proactive reward version identified in checkpoint metadata as:
+
+\begin{center}
+\texttt{speed\_aware\_proactive\_v5\_son\_margin}
+\end{center}
+
+This reward version is designed to encourage proactive highway handovers, avoid ping-pong, and select actions that remain useful after the SON wrapper is applied.
+
+\section{Policies and Baselines}
+The evaluation framework includes the following methods:
+
+\begin{longtable}{p{0.26\textwidth}p{0.64\textwidth}}
+\toprule
+\textbf{Method} & \textbf{Description}\\
+\midrule
+\texttt{no\_handover} & UE remains on the current serving cell unless forced by environment constraints.\\
+\texttt{random\_valid} & Randomly selects a valid candidate cell; useful as a sanity baseline.\\
+\texttt{strongest\_rsrp} & Chooses the cell with highest RSRP.\\
+\texttt{a3\_ttt} & Classical A3 offset and time-to-trigger handover rule.\\
+\texttt{load\_aware} & Heuristic that considers signal and load proxy.\\
+\rawmethod & Direct learned target-cell selection from GNN-DQN Q-values.\\
+\method & GNN-DQN preference wrapped by safety-bounded SON A3/CIO/TTT logic.\\
+\bottomrule
+\end{longtable}
+
+The report headlines \method{} because it is the deployable method. Raw \rawmethod{} is still important because it reveals what the learned model wants to do, but it can be unstable when used directly.
+
+\section{Training Configuration}
+The final fine-tuned run is represented by \path{configs/experiments/colab_finetune_ue.json}. Important configuration choices are shown below.
+
+\begin{table}[H]
+\centering
+\caption{Final fine-tuning configuration summary}
+\begin{tabularx}{\textwidth}{p{0.28\textwidth}Y}
+\toprule
+\textbf{Parameter} & \textbf{Value}\\
+\midrule
+Run name & \texttt{colab\_finetune\_ue}\\
+Feature mode & \ueonly\\
+PRB availability & \texttt{false}\\
+Episodes & 920\\
+Steps per episode & Curriculum from 80 to 120\\
+Validation scenarios & \texttt{highway\_fast}, \texttt{overloaded\_event}, \texttt{real\_pokhara}, \texttt{kathmandu\_real}\\
+Hidden dimension & 256\\
+Dropout & 0.06\\
+Discount factor & 0.975\\
+Learning rate & 0.00015\\
+Batch size & 128\\
+Replay capacity & 550,000\\
+Dueling DQN & Enabled\\
+Double DQN & Enabled\\
+GAT & Disabled in final config; GCN path used\\
+N-step return & 3\\
+PER alpha & 0.6\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Fine-Tuning Strategy}
+Fine-tuning was necessary because earlier pre-refactor checkpoints were not reliably stronger than classical heuristics. The project therefore treats old checkpoints as diagnostic only. The final training strategy emphasizes:
+
+\begin{itemize}
+    \item \textbf{UE-only realism:} train with PRB unavailable to match drive-test and UE-report conditions.
+    \item \textbf{Scenario weighting:} emphasize highway-fast, overloaded-event, dense-urban, and real-Pokhara scenarios.
+    \item \textbf{Validation gating:} track SON performance against baselines, not only raw DQN reward.
+    \item \textbf{Checkpoint compatibility:} reject incompatible feature profiles or model metadata during resume/evaluation.
+    \item \textbf{Safety-first selection:} prefer checkpoints that preserve SON stability and avoid ping-pong/outage.
+\end{itemize}
+
+\section{Training and Evaluation Commands}
+The reproducible training order used by the project is:
+
+\begin{lstlisting}[language=bash,caption={Recommended training and evaluation commands}]
+PYTHONPATH=src python3 -m pytest -q
+python3 scripts/train.py --config configs/experiments/smoke_ue.json
+python3 scripts/train.py --config configs/experiments/smoke_oran.json
+python3 scripts/train.py --config configs/experiments/diagnostic_ue.json
+python3 scripts/train.py --config configs/experiments/multiscenario_ue.json
+
+python3 scripts/train.py --config configs/experiments/colab_finetune_ue.json
+
+python3 scripts/evaluate.py \
+  --checkpoint results/runs/colab_finetune_ue/checkpoints/gnn_dqn.pt \
+  --out-dir results/runs/colab_finetune_ue/eval_30seeds \
+  --seeds 30
+\end{lstlisting}
+
+Resume must use the same configuration used to create the checkpoint. This protects against accidental reuse of a model trained with different features, number of channels, or reward version.
+
+\section{Evaluation KPIs}
+The project evaluates multiple KPIs because no single number captures handover quality.
+
+\begin{longtable}{p{0.24\textwidth}p{0.46\textwidth}p{0.18\textwidth}}
+\toprule
+\textbf{KPI} & \textbf{Meaning} & \textbf{Direction}\\
+\midrule
+Average UE throughput & Mean user throughput in Mbps. & Higher is better\\
+P5 UE throughput & Fifth-percentile throughput; worst-user experience. & Higher is better\\
+Jain load fairness & Fairness of load distribution across cells. & Higher is better\\
+Load standard deviation & Dispersion of load across cells. & Lower is better\\
+Ping-pong rate & Fraction of handovers that reverse too quickly. & Lower is better\\
+Handovers per 1000 decisions & Signaling/mobility activity. & Balanced; lower is safer if throughput is preserved\\
+Outage rate & Fraction of decision steps in outage. & Lower is better\\
+Invalid action rate & Fraction of invalid target selections. & Must be zero or near zero\\
+SON average absolute CIO & Average magnitude of applied CIO bias. & Bounded and interpretable\\
+SON maximum absolute CIO & Maximum CIO magnitude reached. & Must remain within bounds\\
+\bottomrule
+\end{longtable}
+
+Jain fairness is computed as:
+\begin{equation}
+    J(x_1,\dots,x_n)=\frac{\left(\sum_{i=1}^{n}x_i\right)^2}{n\sum_{i=1}^{n}x_i^2}.
+\end{equation}
+A value near 1 indicates balanced distribution; lower values indicate uneven load.
+
+\chapter{Drive-Test Validation and Calibration}
+
+\section{Why Drive-Test Validation Matters}
+A simulation-only project can be internally consistent yet disconnected from real radio behavior. The Pokhara drive-test package is therefore an important part of the project. It does not prove live commercial deployment, but it validates three key aspects:
+
+\begin{itemize}
+    \item The UE-only feature set contains real predictive information for handover timing.
+    \item The simulator's signal and mobility assumptions are reasonably aligned with measured LTE behavior.
+    \item The project problem is real: the observed network shows late handover and sticky-cell behavior.
+\end{itemize}
+
+\section{Drive-Test Campaign}
+The drive-test dataset contains 4,231 LTE measurement samples collected at 1 Hz across six route segments in Pokhara, Nepal on 14--15 May 2026. A Poco X3 smartphone instrumented through Android Debug Bridge and G-NetTrack Pro was used to collect measurements across the Lamachaur, Mahendrapool, Lakeside, and Talchowk corridor.
+
+\begin{table}[H]
+\centering
+\caption{Drive-test dataset summary}
+\begin{tabularx}{\textwidth}{p{0.34\textwidth}Y}
+\toprule
+\textbf{Property} & \textbf{Value}\\
+\midrule
+Total samples & 4,231\\
+Sampling rate & Approximately 1 Hz\\
+Collection dates & 14--15 May 2026\\
+Measurement area & Pokhara, Nepal\\
+Route aperture & Approximately 12 km east-west corridor\\
+Latitude range & 28.147 to 28.257\\
+Longitude range & 83.958 to 84.067\\
+Observed PCIs & 37, 38, 90, 445, 493, 494\\
+Processed dataset & \path{data/processed/pokhara_drivetest_augmented.csv}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\placeholder{Pokhara Drive-Test Route Map}{Insert a map image showing Lamachaur, Mahendrapool, Lakeside, and Talchowk route segments with PCI markers.}
+
+\section{Route-Level Statistics}
+\begin{table}[H]
+\centering
+\caption{Route-level drive-test statistics}
+\begin{tabularx}{\textwidth}{p{0.20\textwidth}r r r r Y}
+\toprule
+\textbf{Route} & \textbf{Samples} & \textbf{Mean RSRP} & \textbf{RSRP Std} & \textbf{Speed} & \textbf{Observed HO}\\
+\midrule
+\texttt{pilot\_test} & 44 & -88.8 & 1.0 & 1.2 & 0\\
+\texttt{route\_lakeside} & 1,823 & -80.7 & 9.0 & 0.04 & 4\\
+\texttt{route\_lakeside\_v2} & 833 & -74.5 & 8.7 & 0.12 & 0\\
+\texttt{route\_lakeside\_v3} & 873 & -77.0 & 11.8 & 8.38 & 0\\
+\texttt{route\_v4} & 177 & -72.6 & 6.2 & 12.70 & 0\\
+\texttt{route\_v5} & 481 & -78.4 & 9.7 & 1.77 & 2\\
+\textbf{Total} & \textbf{4,231} & \textbf{-78.2} & \textbf{9.9} & \textbf{2.5} & \textbf{8}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Most samples are usable. The dataset contains no samples below -110 dBm, but it contains important weak-signal and late-handover cases. The overall RSRP distribution is bimodal, with a weaker stationary/cell-edge mode and a stronger active-drive mode.
+
+\section{Signal Statistics}
+\begin{table}[H]
+\centering
+\caption{Overall signal statistics}
+\begin{tabularx}{\textwidth}{p{0.28\textwidth}r r r r}
+\toprule
+\textbf{Metric} & \textbf{Mean} & \textbf{Std} & \textbf{Min} & \textbf{Max}\\
+\midrule
+RSRP (dBm) & -78.21 & 9.92 & -107 & -49\\
+RSRQ (dB) & -11.69 & 2.38 & -20 & -4\\
+SNR (dB) & 10.07 & 7.50 & -11 & 30\\
+RSRQ load proxy & 0.511 & 0.140 & -- & --\\
+Average neighbors & 3.89 & -- & -- & --\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{RSRP quality classes in the drive-test dataset}
+\begin{tabularx}{\textwidth}{p{0.35\textwidth}r r}
+\toprule
+\textbf{Class} & \textbf{Samples} & \textbf{Share}\\
+\midrule
+Excellent, above -80 dBm & 2,414 & 57.1\%\\
+Good, -80 to -90 dBm & 1,531 & 36.2\%\\
+Fair, -90 to -100 dBm & 221 & 5.2\%\\
+Poor, -100 to -110 dBm & 65 & 1.5\%\\
+Outage, below -110 dBm & 0 & 0.0\%\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The RSRP percentiles are P05 = -91 dBm, P10 = -89 dBm, P25 = -88 dBm, P50 = -78 dBm, P75 = -71 dBm, P90 = -65 dBm, and P95 = -62 dBm. These values form realistic calibration targets for simulation distributions.
+
+\placeholder{Drive-Test RSRP and RSRQ Distributions}{Insert histogram or CDF plots for RSRP, RSRQ, SNR, and RSRQ-derived load proxy.}
+
+\section{Mobility Regime Calibration}
+The drive-test data was segmented by GPS-corrected speed. The measured $|\Delta RSRP|$ increases with speed, which supports the simulator's use of mobility-dependent fading behavior.
+
+\begin{table}[H]
+\centering
+\caption{Mobility regimes and Doppler-like RSRP variation}
+\begin{tabularx}{\textwidth}{p{0.24\textwidth}r r r r}
+\toprule
+\textbf{Regime} & \textbf{Samples} & \textbf{Share} & \textbf{Mean RSRP} & \textbf{Mean $|\Delta RSRP|$}\\
+\midrule
+Stationary, below 1 km/h & 3,296 & 79.0\% & -79.2 & 0.63\\
+Walking, 1--8 km/h & 80 & 1.9\% & -77.5 & 0.61\\
+Urban driving, 8--30 km/h & 218 & 5.2\% & -75.2 & 1.37\\
+Highway, 30--60 km/h & 353 & 8.3\% & -74.8 & 1.48\\
+Highway fast, above 60 km/h & 238 & 5.6\% & -73.1 & 1.64\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The monotonic increase from 0.63 dB per second in stationary measurements to 1.64 dB per second in high-speed measurements is a useful real-world signature. It supports the project's speed-aware reward and highway-specific training scenarios.
+
+\placeholder{Mobility Regime Calibration}{Insert a line or bar plot showing speed regime against mean absolute one-second RSRP change.}
+
+\section{Path-Loss and Shadowing Calibration}
+The processed report package estimates path-loss parameters from observed RSRP and approximate tower centroids. Only PCI 38 provides a reliable local line-of-sight cluster; other cells are biased by limited route geometry or uncertain centroid placement. The calibrated values must therefore be interpreted carefully.
+
+\begin{table}[H]
+\centering
+\caption{Per-cell path-loss fit interpretation}
+\begin{tabularx}{\textwidth}{p{0.10\textwidth}r r Y}
+\toprule
+\textbf{PCI} & \textbf{n} & \textbf{$\sigma$} & \textbf{Interpretation}\\
+\midrule
+38 & 2.66 & 0.31 & Reliable short-range LOS cluster; usable as urban-core calibration anchor.\\
+445 & -0.17 & 1.96 & Too small distance range; not reliable for path-loss exponent.\\
+493 & -11.66 & 8.75 & Centroid/shadow bias; not usable for exponent.\\
+90 & -0.06 & 10.95 & Highway NLOS and route bias; useful mainly for spread intuition.\\
+494 & -0.99 & 8.41 & Wrong centroid or insufficient route geometry; not usable for exponent.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The final simulator presets derived from the analysis are:
+
+\begin{table}[H]
+\centering
+\caption{Recommended calibrated channel presets}
+\begin{tabularx}{\textwidth}{p{0.24\textwidth}r r Y}
+\toprule
+\textbf{Zone} & \textbf{Path-loss exponent} & \textbf{Shadowing $\sigma$} & \textbf{Basis}\\
+\midrule
+Pokhara urban & 2.7 & 4.0 dB & PCI 38 LOS fit with practical margin.\\
+Suburban & 3.0 & 5.5 dB & Interpolated between urban and highway behavior.\\
+Highway & 3.2 & 6.5 dB & Wide RSRP range and mobility-induced variation.\\
+Shadow/rural & 3.8 & 8.0 dB & Distribution tail and obstructed terrain assumption.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+This calibration supports the simulator, but it should not be overstated. Only one cell gives a clean exponent estimate. The strongest defensible claim is that the simulator uses empirically informed Pokhara channel parameters and speed variation, not that every cell has been individually calibrated.
+
+\section{Observed Handover Events}
+The drive-test dataset contains eight observed handovers. The analysis classifies two as good, three as late, and three as neutral.
+
+\begin{table}[H]
+\centering
+\caption{Observed drive-test handover events}
+\begin{tabularx}{\textwidth}{r p{0.20\textwidth}p{0.16\textwidth}r p{0.18\textwidth}}
+\toprule
+\textbf{No.} & \textbf{Route} & \textbf{PCI Change} & \textbf{RSRP Change} & \textbf{Classification}\\
+\midrule
+1 & \texttt{route\_lakeside} & 445 $\rightarrow$ 38 & -3 dB & Neutral\\
+2 & \texttt{route\_lakeside} & 38 $\rightarrow$ 37 & +12 dB & Good\\
+3 & \texttt{route\_lakeside} & 37 $\rightarrow$ 445 & -19 dB & Late\\
+4 & \texttt{route\_lakeside} & 445 $\rightarrow$ 494 & +15 dB & Good\\
+5 & \texttt{route\_lakeside} & 494 $\rightarrow$ 493 & 0 dB & Neutral\\
+6 & \texttt{route\_lakeside\_v3} & 493 $\rightarrow$ 90 & -16 dB & Late\\
+7 & \texttt{route\_v5} & 90 $\rightarrow$ 493 & 0 dB & Neutral\\
+8 & \texttt{route\_v5} & 493 $\rightarrow$ 494 & -22 dB & Late\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+This evidence is important for the project problem statement. The observed failure is not excessive ping-pong; the observed ping-pong count is zero. The real problem is over-conservative or sticky behavior. Approximately 294 rows satisfy A3-trigger-like conditions, corresponding to about 25 sustained A3 windows, yet only eight actual handovers occurred. This indicates that many eligible neighbor opportunities were not executed.
+
+\placeholder{Drive-Test Handover Event Timeline}{Insert a timeline showing serving PCI, RSRP, A3 trigger windows, and the eight observed handover events.}
+
+\section{Critical Sticky-Cell Case}
+The most important single case is \texttt{route\_v4}. This route lasts about 8.2 minutes, reaches an average GPS speed of 12.7 m/s and a maximum of 33.3 m/s, remains on PCI 90, and records zero handovers. During the segment, RSRP ranges from -107 dBm to -49 dBm and 65 samples fall below -100 dBm.
+
+This is a textbook sticky-cell failure. A conventional network may avoid unnecessary handover, but in this case the UE experiences severe signal degradation without mobility response. This directly motivates a speed-aware proactive model.
+
+\section{Independent Feature Validation}
+To validate the UE-only feature set without circular reasoning, a GradientBoostingClassifier was trained on the drive-test measurements to predict future cell-ID changes within a 5-second window. The model used only UE-observable features and a time-respecting 75/25 split. It achieved ROC-AUC = 0.978 on the held-out set.
+
+\begin{table}[H]
+\centering
+\caption{Drive-test feature importance for future cell-change prediction}
+\begin{tabularx}{\textwidth}{r p{0.34\textwidth}r Y}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Importance} & \textbf{Project Meaning}\\
+\midrule
+1 & GPS-corrected speed & 0.277 & Mobility regime is highly predictive of handover timing.\\
+2 & Neighbor RSRP margin & 0.223 & A3-like neighbor advantage is essential.\\
+3 & SNR & 0.152 & Link quality affects usefulness of handover.\\
+4 & Serving RSRP & 0.145 & Coverage degradation remains fundamental.\\
+5 & RSRQ-derived load proxy & 0.071 & Quality/load proxy contributes useful information.\\
+6 & RSRQ & 0.066 & Interference and quality context matter.\\
+7 & Second-neighbor RSRP & 0.030 & Broader neighborhood context contributes.\\
+8 & RSRP trend & 0.020 & Temporal trend supports proactive decisions.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The feature ranking aligns with the GNN-DQN's \ueonly{} profile. This is one of the strongest validation findings: the features used by the model are not arbitrary; they are independently predictive in real Pokhara LTE measurements.
+
+\section{Counterfactual Drive-Test Findings}
+The drive-test validation package includes counterfactual interpretation of model behavior. The strongest examples are:
+
+\begin{itemize}
+    \item For the late 493 $\rightarrow$ 90 case, the baseline drops to approximately -104 dBm, while the model would trigger earlier near -82 to -83 dBm.
+    \item For the spurious 493 $\rightarrow$ 494 case, the model blocks a handover that would degrade signal by approximately 22 dB.
+    \item For \texttt{route\_v4}, where the observed network issued no handover despite RSRP reaching -107 dBm, the speed-aware model would trigger proactively near -85 dBm.
+\end{itemize}
+
+These counterfactual findings should be presented as validation evidence, not as live-network proof. They show that the model's feature design and learned policy are aligned with real problematic handover cases.
+
+\section{What the Validation Proves and Does Not Prove}
+The validation proves:
+\begin{itemize}
+    \item Pokhara LTE measurements contain UE-observable predictors of handover timing.
+    \item Speed and neighbor margin are key features, supporting the project's feature profile.
+    \item Sticky-cell and late-handover problems exist in the collected route data.
+    \item The simulator's channel and mobility assumptions are informed by empirical statistics.
+\end{itemize}
+
+The validation does not prove:
+\begin{itemize}
+    \item A live commercial deployment has been completed.
+    \item RSRQ equals true PRB utilization.
+    \item Every cell in Pokhara has been individually calibrated.
+    \item The model will outperform operator-tuned A3 in every scenario.
+\end{itemize}
+
+This distinction makes the final report stronger, not weaker, because it keeps the engineering claim precise.
+
+\chapter{Simulation Results and Discussion}
+
+\section{Evaluation Philosophy}
+The report uses the latest realistic code path and treats old pre-refactor outputs as diagnostic. The final interpretation is based on the \ueonly{} feature profile and \method{} as the deployable method. Raw \rawmethod{} is included as a research baseline and ablation.
+
+The main citable evaluation set is \path{results/runs/colab_finetune_ue/eval_30seeds}, which evaluates six representative scenarios using 30 seeds. Additional topology-generalization evidence comes from \path{results/runs/colab_finetune_ue/eval_final_thesis}.
+
+\section{Main Six-Scenario Result}
+\begin{table}[H]
+\centering
+\caption{A3-TTT, raw GNN-DQN, and SON-GNN-DQN throughput comparison}
+\begin{tabularx}{\textwidth}{p{0.20\textwidth}r r r r}
+\toprule
+\textbf{Scenario} & \textbf{A3 Mbps} & \textbf{Raw GNN Mbps} & \textbf{SON Mbps} & \textbf{SON vs A3}\\
+\midrule
+Dense urban & 3.462 & 3.593 & 3.424 & -1.08\%\\
+Highway & 4.864 & 3.949 & 4.863 & -0.01\%\\
+Highway fast & 3.677 & 3.425 & 3.676 & -0.01\%\\
+Overloaded event & 2.469 & 3.072 & 2.478 & +0.38\%\\
+Sparse rural & 2.736 & 2.705 & 2.730 & -0.21\%\\
+Suburban & 3.602 & 3.525 & 3.577 & -0.69\%\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The average SON throughput margin relative to A3 across these six scenarios is -0.27\%, with a minimum of -1.08\% and a maximum of +0.38\%. This is not a large throughput win, but it is a strong stability result: the SON layer keeps the learned method close to a robust A3 baseline while avoiding unsafe raw GNN behavior.
+
+\section{Ping-Pong and Handover Stability}
+\begin{table}[H]
+\centering
+\caption{Stability comparison for main six-scenario evaluation}
+\begin{tabularx}{\textwidth}{p{0.20\textwidth}r r r r}
+\toprule
+\textbf{Scenario} & \textbf{A3 Ping-Pong} & \textbf{Raw Ping-Pong} & \textbf{SON Ping-Pong} & \textbf{SON HO/1000}\\
+\midrule
+Dense urban & 0.0000 & 0.0462 & 0.0007 & 15.90\\
+Highway & 0.0000 & 0.0399 & 0.0000 & 21.87\\
+Highway fast & 0.0000 & 0.0688 & 0.0002 & 32.45\\
+Overloaded event & 0.0000 & 0.0085 & 0.0008 & 6.91\\
+Sparse rural & 0.0000 & 0.1108 & 0.0022 & 6.18\\
+Suburban & 0.0000 & 0.0246 & 0.0015 & 11.27\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The raw GNN-DQN sometimes increases ping-pong and handover rate. For example, in the highway scenario it produces 234.1 handovers per 1000 decisions compared with 21.4 for A3 and 21.9 for SON-GNN-DQN. The SON layer absorbs this instability and returns the final behavior to an operator-friendly range.
+
+\section{Full Baseline Comparison}
+\begin{table}[H]
+\centering
+\caption{Representative dense urban KPI comparison}
+\begin{tabularx}{\textwidth}{p{0.22\textwidth}r r r r}
+\toprule
+\textbf{Method} & \textbf{Avg Mbps} & \textbf{P5 Mbps} & \textbf{Fairness} & \textbf{Ping-Pong}\\
+\midrule
+\texttt{no\_handover} & 3.657 & 1.348 & 0.619 & 0.000\\
+\texttt{random\_valid} & 3.275 & 1.402 & 0.865 & 0.052\\
+\texttt{strongest\_rsrp} & 3.365 & 1.135 & 0.527 & 0.182\\
+\texttt{a3\_ttt} & 3.462 & 1.212 & 0.555 & 0.000\\
+\texttt{load\_aware} & 3.385 & 1.158 & 0.532 & 0.195\\
+\rawmethod & 3.593 & 1.359 & 0.686 & 0.046\\
+\method & 3.424 & 1.182 & 0.544 & 0.001\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Dense urban shows the tradeoff clearly. Raw GNN-DQN achieves higher throughput, but with higher ping-pong and more aggressive handover. SON-GNN-DQN is more conservative. It gives up some raw learning advantage but produces a safer behavior that is easier to defend for LTE SON deployment.
+
+\section{Overloaded Event Behavior}
+The overloaded event scenario is the strongest example of why learned preferences are useful. Raw \rawmethod{} reaches 3.072 Mbps compared with 2.469 Mbps for A3, suggesting that the learned model discovers useful congestion-aware behavior. SON-GNN-DQN reaches 2.478 Mbps, slightly above A3, with almost zero ping-pong.
+
+This result indicates that the learned model contains valuable offloading information, but the current SON controller is conservative. A future controller could expose more of this offloading gain while preserving stability.
+
+\section{Highway Behavior}
+In highway and highway-fast scenarios, direct neural control is risky. Raw \rawmethod{} underperforms A3 by -18.81\% in highway and -6.86\% in highway-fast, with high handover activity. The SON wrapper nearly matches A3 throughput and keeps ping-pong near zero.
+
+This is a central defense point. The project does not hide the raw model's weakness. Instead, it uses that evidence to justify the safety-bounded SON design. For mobility management, a safe wrapper is not optional; it is necessary.
+
+\placeholder{Raw GNN-DQN vs SON-GNN-DQN Ablation}{Insert a chart comparing raw direct GNN-DQN and SON-wrapped behavior for throughput, ping-pong, and handover rate.}
+
+\section{Topology Generalization}
+\begin{table}[H]
+\centering
+\caption{Selected unseen-topology results from final thesis evaluation}
+\begin{tabularx}{\textwidth}{p{0.22\textwidth}r r r r}
+\toprule
+\textbf{Scenario} & \textbf{A3 Mbps} & \textbf{Raw GNN Mbps} & \textbf{SON Mbps} & \textbf{SON vs A3}\\
+\midrule
+Kathmandu real & 3.106 & 1.841 & 3.089 & -0.55\%\\
+Real Pokhara & 4.098 & 3.081 & 4.090 & -0.21\%\\
+Unknown hex grid & 3.366 & 3.327 & 3.269 & -2.88\%\\
+Coverage hole & 4.910 & 4.874 & 4.908 & -0.03\%\\
+Dharan synthetic & 4.438 & 2.923 & 4.385 & -1.20\%\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The Kathmandu and Pokhara results show why topology-generalized graph modeling and SON safety matter. Raw GNN-DQN collapses badly on Kathmandu real (-40.72\% relative to A3), while SON-GNN-DQN remains near A3 (-0.55\%). This makes the deployable conclusion clear: the GNN is a preference learner, not an unconstrained handover controller.
+
+\section{Result Summary}
+Across the six-scenario 30-seed evaluation:
+
+\begin{itemize}
+    \item SON-GNN-DQN average throughput margin vs A3 is -0.27\%.
+    \item SON-GNN-DQN wins throughput in 1 of 6 scenarios, mainly overloaded event.
+    \item Raw GNN-DQN has wider variance, from -18.81\% to +24.42\% versus A3.
+    \item SON-GNN-DQN mean ping-pong rate is approximately 0.00089.
+    \item Raw GNN-DQN mean ping-pong rate is approximately 0.0498.
+    \item Random valid handover is much worse on average and produces excessive handover activity.
+\end{itemize}
+
+Across the ten-scenario final thesis evaluation:
+\begin{itemize}
+    \item SON-GNN-DQN mean throughput margin vs A3 is -0.58\%.
+    \item SON-GNN-DQN wins in 2 of 10 scenarios.
+    \item Raw GNN-DQN mean margin is -8.50\%, confirming that direct neural control is unsafe for final deployment.
+\end{itemize}
+
+\section{Interpretation for Final Defense}
+The strongest final claim is:
+
+\begin{quote}
+The proposed system is a SON-compatible GNN-DQN framework where the GNN-DQN learns topology-aware per-UE handover preferences from UE-observable measurements, and the SON layer converts those preferences into bounded LTE-style handover parameter behavior. The result preserves A3-like stability while adding a learning-based path for congestion, mobility, and topology adaptation.
+\end{quote}
+
+The report should avoid claiming that raw GNN-DQN universally beats A3. It should also avoid claiming live O-RAN deployment. The defendable result is more mature: learned intelligence is valuable, but it must be safety-bounded for telecom mobility control.
+
+\placeholder{Throughput Comparison Figure}{Insert bar chart from \path{results/runs/colab_finetune_ue/figures/throughput_comparison.png} or a polished redraw.}
+
+\placeholder{Ping-Pong Comparison Figure}{Insert bar chart from \path{results/runs/colab_finetune_ue/figures/pingpong_comparison.png} or a polished redraw.}
+
+\placeholder{Topology Generalization Figure}{Insert topology-generalization plot comparing training and unseen test scenarios.}
+
+\chapter{Testing, Verification, and Reproducibility}
+
+\section{Test Suite}
+The project includes unit and integration tests for environment behavior, feature construction, policy validity, SON controller behavior, checkpoint compatibility, and drive-test processing. At the time of this report audit, running:
+
+\begin{lstlisting}[language=bash]
+PYTHONPATH=src python3 -m pytest -q
+\end{lstlisting}
+
+produced 45 passing tests and 2 failing tests. The two failures are important to document honestly:
+
+\begin{itemize}
+    \item \path{tests/unit/test_ns3_compare.py::test_ns3_report_schema} fails because \path{scripts/compare_ns3.py} is not currently present.
+    \item \path{tests/unit/test_son_controller.py::test_son_controller_applies_bounded_cio_update} expects a generic preference CIO update path, while the current SON controller applies bounded updates mainly through overload/MLB logic.
+\end{itemize}
+
+Therefore, the final acceptance gate is not fully green yet. This does not invalidate the report results, but it should be fixed before a final code submission or defense demonstration.
+
+\section{Checkpoint Metadata Verification}
+Checkpoint metadata validation is implemented to prevent invalid reuse of saved models. Important metadata includes:
+
+\begin{itemize}
+    \item Feature mode: \ueonly{} or \orane.
+    \item PRB availability flag.
+    \item Feature dimension.
+    \item Model version.
+    \item Reward version.
+    \item DQN hidden dimension and architecture settings.
+\end{itemize}
+
+For the final fine-tuned checkpoint, the important metadata values are:
+
+\begin{table}[H]
+\centering
+\caption{Final checkpoint metadata summary}
+\begin{tabularx}{\textwidth}{p{0.28\textwidth}Y}
+\toprule
+\textbf{Metadata} & \textbf{Value}\\
+\midrule
+Checkpoint path & \path{results/runs/colab_finetune_ue/checkpoints/gnn_dqn.pt}\\
+Checkpoint kind & Resume/final training checkpoint\\
+Model version & \texttt{gnn\_dqn\_v4\_layernorm\_per\_nstep}\\
+Reward version & \texttt{speed\_aware\_proactive\_v5\_son\_margin}\\
+Feature mode & \ueonly\\
+PRB available & False\\
+Feature dimension & 11\\
+Max cells metadata & 20\\
+Episodes & 920\\
+Hidden dimension & 256\\
+GAT enabled & False\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Reproducibility}
+The project is reproducible through configuration files and command-line scripts. The most important reproducibility rules are:
+
+\begin{itemize}
+    \item Always set \path{PYTHONPATH=src} when running tests or scripts.
+    \item Use JSON configs in \path{configs/experiments/}; do not manually edit training code for routine experiments.
+    \item Resume only with the exact same config used for the original run.
+    \item Treat \path{results/archive_prefix/} as diagnostic, not final citable output.
+    \item Include all seven baseline methods in final tables.
+    \item Use \method{} as the final deployable method name.
+\end{itemize}
+
+\section{Known Limitations}
+The current project has the following limitations:
+
+\begin{itemize}
+    \item The drive-test validation uses counterfactual model analysis rather than live network intervention.
+    \item True PRB utilization is not available in the drive-test path.
+    \item The SON controller is conservative, which preserves stability but limits throughput gain in congestion scenarios.
+    \item The ns-3 comparison script is referenced by documentation but not currently implemented in the audited codebase.
+    \item The current result set shows throughput parity more than throughput dominance.
+    \item Real operator deployment would require integration with network management systems, measurement-report streams, and policy controls.
+\end{itemize}
+
+\chapter{Engineering Design Discussion}
+
+\section{Why the Final Design is Better Than Direct AI Handover}
+A direct AI handover system is attractive in simulation because it can maximize reward without traditional restrictions. However, the results show why this is not safe enough. Raw GNN-DQN can produce high gain in overloaded event scenarios, but it can also underperform badly in highway and unseen-topology cases. In a real LTE network, such behavior would be unacceptable.
+
+The SON-GNN-DQN design is more engineering-realistic. It treats the neural model as an advisor and the SON layer as the executor. The executor enforces bounded CIO, TTT, update intervals, overload checks, and rollback. This is exactly the kind of structure expected in a safety-critical telecom optimization system.
+
+\section{Why UE-Only is the Correct Main Path}
+The \ueonly{} profile is the correct main path because it matches what the project can validate. The Pokhara drive test contains UE-observable measurements, not base-station scheduler counters. A report claiming true PRB-based optimization would be weak unless the project had operator telemetry. By using UE-only features and explicitly treating RSRQ as a proxy, the project remains both advanced and honest.
+
+The \orane{} profile is still valuable. It shows that the software design can be extended to future O-RAN/E2 telemetry. But it should be presented as future work or a demo profile.
+
+\section{Why Graph Learning is Necessary}
+The Kathmandu and unknown-topology evaluations show the importance of graph learning. A flat DQN or fixed vector representation would tie the model to one number of cells and one ordering of inputs. The graph representation allows the model to process different topologies, while the SON wrapper prevents catastrophic behavior when the learned preference does not transfer perfectly.
+
+\section{Design Tradeoffs}
+\begin{table}[H]
+\centering
+\caption{Major design tradeoffs}
+\begin{tabularx}{\textwidth}{p{0.24\textwidth}Y Y}
+\toprule
+\textbf{Decision} & \textbf{Benefit} & \textbf{Cost}\\
+\midrule
+UE-only primary profile & Validated by drive-test data and deployable without scheduler counters. & Cannot use true PRB load in the main path.\\
+SON wrapper & Safe, bounded, LTE-compatible behavior. & Reduces raw RL throughput gains in some scenarios.\\
+GNN model & Handles variable topologies and cell counts. & More complex than flat DQN or heuristic rules.\\
+Conservative TTT/CIO bounds & Reduces ping-pong and unstable handovers. & May miss some aggressive offloading opportunities.\\
+Scenario-weighted fine-tuning & Focuses learning on highway and overload failure modes. & Requires careful validation to avoid overfitting.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Recommended Final Report Figures}
+The following figures should be added before final printing:
+
+\begin{enumerate}
+    \item Project architecture diagram.
+    \item UE-only feature matrix diagram.
+    \item GNN message-passing diagram.
+    \item SON control loop diagram.
+    \item Pokhara drive-test route map.
+    \item RSRP/RSRQ distribution plots.
+    \item Mobility regime vs $|\Delta RSRP|$ plot.
+    \item Handover event timeline.
+    \item Throughput comparison bar chart.
+    \item Ping-pong comparison bar chart.
+    \item Topology generalization comparison.
+    \item Final workflow diagram from training to evaluation to validation.
+\end{enumerate}
+
+\chapter{Conclusion and Future Work}
+
+\section{Conclusion}
+This project designed and implemented a SON-compatible GNN-DQN framework for LTE handover optimization and load balancing. The final method, \method, uses a graph neural network and DQN to learn per-UE target-cell preferences from UE-observable measurements, then applies those preferences through a bounded SON controller that resembles standard A3/CIO/TTT behavior.
+
+The final project direction is technically strong because it does not overclaim direct AI replacement of LTE mobility control. Instead, it demonstrates a practical hybrid design. Raw GNN-DQN is valuable because it learns congestion-aware and proactive handover preferences, but raw direct control can be unstable. The SON layer makes the learned behavior safer and more deployable.
+
+The Pokhara drive-test validation is one of the most important parts of the project. It shows that the UE-only feature set is meaningful in real LTE measurements. It also shows that sticky-cell and late-handover behavior occurred in the collected data. The independent gradient-boosted classifier result, with ROC-AUC 0.978, confirms that speed, neighbor margin, SNR, RSRP, and RSRQ-derived load proxy are predictive of future cell changes.
+
+Simulation results show that \method{} maintains near-A3 throughput while strongly reducing the unsafe behavior of raw GNN-DQN. In the six-scenario 30-seed evaluation, SON-GNN-DQN stays within -0.27\% average throughput margin relative to A3 while keeping mean ping-pong near zero. In unseen-topology scenarios, the SON wrapper prevents severe raw-model collapse, especially in Kathmandu real and real Pokhara evaluations.
+
+The final engineering conclusion is therefore:
+\begin{quote}
+A topology-generalized GNN-DQN can learn useful handover preferences from UE-observable measurements, but the most deployable LTE solution is to place that learned intelligence inside a safety-bounded SON controller.
+\end{quote}
+
+\section{Future Work}
+Future work should focus on the following:
+
+\begin{itemize}
+    \item Implement and validate the missing ns-3 comparison script for formal KS-test calibration.
+    \item Tune the SON controller to expose more congestion offloading gain while preserving ping-pong safety.
+    \item Add a live or semi-live replay pipeline using continuous drive-test streams.
+    \item Extend the \orane{} profile using real O-RAN/E2 PRB and KPI telemetry when available.
+    \item Include flat-DQN and non-graph ablation results for a stronger topology-generalization argument.
+    \item Run larger 40-cell and 100-cell inference tests as a defense demonstration.
+    \item Partner with an operator for offline measurement-report validation or controlled field testing.
+\end{itemize}
+
+\placeholder{Final Training-to-Validation Workflow}{Insert one final workflow figure connecting configs, simulator, GNN-DQN training, SON evaluation, drive-test validation, and report KPIs.}
+
+\appendix
+
+\chapter{Appendix A: Final Defense Narrative}
+The final defense should use the following narrative:
+
+\begin{quote}
+Our project solves LTE handover and load-balancing as a safety-bounded learning problem. Instead of replacing LTE handover rules with a black-box model, we train a GNN-DQN to learn topology-aware handover preferences from UE-observable measurements. Then a SON layer translates those preferences into bounded A3/CIO/TTT behavior. This makes the system realistic for LTE deployment because the final control action remains compatible with standard handover parameters.
+\end{quote}
+
+The most important points to say clearly are:
+\begin{itemize}
+    \item Main path is \ueonly.
+    \item Headline method is \method.
+    \item Raw \rawmethod{} is an ablation and learned preference model.
+    \item RSRQ-derived load is a proxy, not true PRB.
+    \item O-RAN/E2 is future work, not current deployment.
+    \item Drive-test validation supports feature design and sticky-cell problem framing.
+    \item The result is safety and deployability with near-A3 throughput, not universal throughput domination.
+\end{itemize}
+
+\chapter{Appendix B: KPI Formula Notes}
+\section{Average Throughput}
+Average UE throughput is:
+\begin{equation}
+    \bar{T} = \frac{1}{N_{UE}}\sum_{u=1}^{N_{UE}}T_u.
+\end{equation}
+
+\section{P5 Throughput}
+P5 throughput is the fifth percentile of user throughput values. It is used as a worst-user experience metric:
+\begin{equation}
+    T_{P5} = \mathrm{percentile}(T_1,\dots,T_{N_{UE}}, 5).
+\end{equation}
+
+\section{Ping-Pong Rate}
+Ping-pong rate is the fraction of handovers that return to a recent previous serving cell within a short time window:
+\begin{equation}
+    P_{\text{pingpong}} = \frac{N_{\text{pingpong}}}{\max(N_{\text{handover}},1)}.
+\end{equation}
+
+\section{Handover Rate}
+Handovers per 1000 decisions is:
+\begin{equation}
+    HO_{1000} = 1000 \times \frac{N_{\text{handover}}}{N_{\text{decisions}}}.
+\end{equation}
+
+\section{Outage Rate}
+Outage rate is:
+\begin{equation}
+    O = \frac{N_{\text{outage steps}}}{N_{\text{total steps}}}.
+\end{equation}
+
+\chapter{Appendix C: Image Placeholder Checklist}
+Before final submission, replace the placeholders with polished figures:
+
+\begin{longtable}{p{0.08\textwidth}p{0.32\textwidth}p{0.50\textwidth}}
+\toprule
+\textbf{No.} & \textbf{Figure} & \textbf{Recommended Source}\\
+\midrule
+1 & Overall architecture & Draw manually or generate from system design.\\
+2 & GNN message passing & Draw manually using cell graph and feature matrix.\\
+3 & SON safety loop & Draw manually from SON controller logic.\\
+4 & Pokhara route map & Drive-test GPS path visualization.\\
+5 & Signal distributions & Generate from \path{pokhara_drivetest_augmented.csv}.\\
+6 & Mobility calibration & Plot speed regime vs $|\Delta RSRP|$.\\
+7 & Handover timeline & Plot observed HO events and A3 windows.\\
+8 & Throughput chart & \path{results/runs/colab_finetune_ue/figures/throughput_comparison.png}.\\
+9 & Ping-pong chart & \path{results/runs/colab_finetune_ue/figures/pingpong_comparison.png}.\\
+10 & Topology generalization & \path{results/runs/colab_finetune_ue/figures/topology_generalization.png}.\\
+\bottomrule
+\end{longtable}
+
+\chapter{Appendix D: Codebase Reading Summary}
+The report is based on the current project files, including:
+
+\begin{itemize}
+    \item \path{README.md}
+    \item \path{docs/THESIS_COMPREHENSIVE_GUIDE.md}
+    \item \path{docs/reports/REPORT.md}
+    \item \path{docs/reports/THESIS_MASTER_REFERENCE.md}
+    \item \path{docs/guides/DEFENSE_TRAINING_PLAN.md}
+    \item \path{results/Final_Report_Package/00_MASTER_REPORT.md}
+    \item \path{results/Final_Report_Package/01_Dataset_and_Signal_Statistics.md}
+    \item \path{results/Final_Report_Package/02_Calibration_and_Mobility.md}
+    \item \path{results/Final_Report_Package/03_Handover_Analysis.md}
+    \item \path{results/Final_Report_Package/04_Results_and_Expected_Performance.md}
+    \item \path{results/Final_Report_Package/05_Publication_Paragraphs.md}
+    \item \path{results/Final_Report_Package/06_Model_Validation_and_Predictions.md}
+    \item \path{src/handover_gnn_dqn/env/simulator.py}
+    \item \path{src/handover_gnn_dqn/models/gnn_dqn.py}
+    \item \path{src/handover_gnn_dqn/son/controller.py}
+    \item \path{src/handover_gnn_dqn/policies/policies.py}
+    \item \path{src/handover_gnn_dqn/metrics/experiment.py}
+    \item \path{src/handover_gnn_dqn/topology/scenarios.py}
+    \item \path{scripts/train.py}
+    \item \path{scripts/evaluate.py}
+    \item \path{scripts/prepare_drive_data.py}
+    \item \path{scripts/replay_drivetest.py}
+\end{itemize}
+
+\chapter{Appendix E: Suggested Viva Questions and Answers}
+\section*{Why did you use GNN instead of only DQN?}
+A normal DQN requires a fixed input size and can overfit to one cell ordering. A GNN represents cells as nodes and neighbor relations as edges, so the same model can run on different topologies and cell counts.
+
+\section*{Why is SON needed if the GNN-DQN already predicts actions?}
+Raw neural decisions can be unstable. The SON layer converts learned preferences into bounded CIO/TTT behavior, which is safer and compatible with LTE handover control.
+
+\section*{Is this an O-RAN xApp?}
+No. The current system is SON-compatible and O-RAN-ready as future work. The main validated path is UE-only and does not require live E2 integration.
+
+\section*{Do you use real PRB utilization?}
+No, not in the main thesis path. The drive-test data does not contain true PRB utilization. RSRQ is used only as a load/interference proxy.
+
+\section*{What is the best final result?}
+The best final result is stability and deployability: SON-GNN-DQN stays close to A3 throughput while preventing the unsafe raw GNN-DQN behavior and validating the UE-only feature design with real drive-test data.
+
+\begin{thebibliography}{99}
+
+\bibitem{3gpp36331}
+3GPP, \emph{TS 36.331: Evolved Universal Terrestrial Radio Access (E-UTRA); Radio Resource Control (RRC); Protocol specification}.
+
+\bibitem{3gpp36300}
+3GPP, \emph{TS 36.300: Evolved Universal Terrestrial Radio Access (E-UTRA) and Evolved Universal Terrestrial Radio Access Network (E-UTRAN); Overall description}.
+
+\bibitem{sutton}
+R. S. Sutton and A. G. Barto, \emph{Reinforcement Learning: An Introduction}, 2nd ed. MIT Press, 2018.
+
+\bibitem{dqn}
+V. Mnih et al., ``Human-level control through deep reinforcement learning,'' \emph{Nature}, vol. 518, pp. 529--533, 2015.
+
+\bibitem{double}
+H. van Hasselt, A. Guez, and D. Silver, ``Deep reinforcement learning with double Q-learning,'' in \emph{AAAI}, 2016.
+
+\bibitem{dueling}
+Z. Wang et al., ``Dueling network architectures for deep reinforcement learning,'' in \emph{ICML}, 2016.
+
+\bibitem{per}
+T. Schaul, J. Quan, I. Antonoglou, and D. Silver, ``Prioritized experience replay,'' in \emph{ICLR}, 2016.
+
+\bibitem{gcn}
+T. N. Kipf and M. Welling, ``Semi-supervised classification with graph convolutional networks,'' in \emph{ICLR}, 2017.
+
+\bibitem{gat}
+P. Velickovic et al., ``Graph attention networks,'' in \emph{ICLR}, 2018.
+
+\bibitem{graphsage}
+W. Hamilton, Z. Ying, and J. Leskovec, ``Inductive representation learning on large graphs,'' in \emph{NeurIPS}, 2017.
+
+\bibitem{son}
+A. Imran, A. Zoha, and A. Abu-Dayya, ``Challenges in 5G: How to empower SON with big data for enabling 5G,'' \emph{IEEE Network}, 2014.
+
+\bibitem{wirelessgnn}
+Y. Shen, J. Zhang, S. H. Song, and K. B. Letaief, ``Graph neural networks for wireless communications: From theory to practice,'' \emph{IEEE Transactions and Surveys style literature}, survey reference.
+
+\end{thebibliography}
+
+\end{document}
