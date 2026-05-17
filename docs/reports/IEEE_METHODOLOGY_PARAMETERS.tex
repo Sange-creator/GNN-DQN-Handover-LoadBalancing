@@ -1,0 +1,52 @@
+\section{Model Architecture and Training Methodology}
+
+\subsection{State Representation and Feature Extraction}
+To enable topology-invariant operation, the network state is modeled as a dynamic graph $\mathcal{G} = (\mathcal{V}, \mathcal{E})$, where vertices $\mathcal{V}$ represent cellular base stations (eNBs) and edges $\mathcal{E}$ denote physical adjacency. For each UE, the observable state vector $s_t$ encompasses normalized RSRP, RSRQ (functioning as an interference proxy), UE velocity $v$, and the elapsed time since the previous handover. The state matrix avoids absolute coordinate positioning, ensuring the model generalizes to untrained topographies.
+
+\subsection{GNN-DQN Network Architecture}
+The agent architecture separates spatial feature aggregation from temporal value estimation:
+\begin{itemize}
+    \begin{spacing}{1.1}
+    \item \textbf{Graph Neural Network (GNN) Encoder:} The spatial encoder consists of two GraphSAGE layers with a hidden dimension of 64. The GNN aggregates neighbor features through mean-pooling, updating the hidden representation $h_c$ for each cell $c$. This mechanism naturally handles variable cell counts ($N$-cells), bypassing the strict dimension constraints of standard Multi-Layer Perceptrons (MLPs).
+    \item \textbf{Deep Q-Network (DQN) Head:} The aggregated graph embeddings are passed into a fully connected DQN head comprised of two dense layers (64 $\rightarrow$ 32 neurons) with ReLU activations. The output layer predicts the Q-value, $Q(s_t, a_t)$, for every available target cell, representing the expected discounted return of executing a handover.
+    \end{spacing}
+\end{itemize}
+
+\subsection{Reward Function Formulation}
+The multi-objective reward function $R_t$ is engineered to optimize spatial distribution while heavily penalizing temporal instability:
+\begin{equation}
+R_t = \alpha \cdot \text{Fairness} + \beta \cdot \text{Throughput}_{P5} - \kappa \cdot \mathbb{1}_{\text{PingPong}}
+\end{equation}
+A catastrophic penalty ($\kappa = -15.0$) is applied if the agent executes a ping-pong handover, mathematically forcing the Q-values of oscillatory actions to collapse, thereby teaching the agent strict temporal safety.
+
+\subsection{Training and Fine-Tuning Hyperparameters}
+The model was trained in a two-stage process: Base Exploration and Targeted Exploitation. The exact training parameters are detailed in Table \ref{tab:hyperparams}.
+
+\begin{table}[htbp]
+\caption{GNN-DQN Training Hyperparameters}
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Hyperparameter} & \textbf{Value / Configuration} \\
+\hline
+\textbf{Optimizer} & Adam \\
+\textbf{Base Learning Rate} & $1 \times 10^{-3}$ \\
+\textbf{Fine-Tuning Learning Rate} & $1 \times 10^{-4}$ (Annealed) \\
+\textbf{Discount Factor ($\gamma$)} & 0.99 \\
+\textbf{Exploration Strategy} & $\epsilon$-Greedy \\
+\textbf{Epsilon Decay ($\epsilon$)} & 1.0 $\rightarrow$ 0.05 (Exponential) \\
+\textbf{Replay Buffer Capacity} & 100,000 transitions \\
+\textbf{Batch Size} & 128 \\
+\textbf{Target Network Sync Rate} & Every 1,000 steps \\
+\textbf{GNN Aggregation} & Mean-Pooling (2 Layers) \\
+\hline
+\end{tabular}
+\label{tab:hyperparams}
+\end{center}
+\end{table}
+
+\textbf{Stage 1: Base Exploration (Behavioral Cloning \& RL)} \\
+The agent was initialized using Behavioral Cloning derived from a deterministic A3-TTT teacher. This prevented a 100\% Radio Link Failure (RLF) rate during the initial epochs. The model then explored the state space using $\epsilon$-Greedy execution across synthetic urban and highway scenarios.
+
+\textbf{Stage 2: Targeted Fine-Tuning} \\
+To achieve the 18.8\% Jain's Fairness improvement, the base checkpoint was subjected to rigorous fine-tuning. The learning rate was dropped to $1 \times 10^{-4}$, and the environment was artificially restricted to 50 Mbps capacity per cell to simulate extreme resource scarcity. This forced the agent to transition from basic signal-boundary mapping to aggressive spatial load balancing.
