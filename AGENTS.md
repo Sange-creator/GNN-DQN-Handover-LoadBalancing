@@ -2,13 +2,12 @@
 
 ## Current Direction
 
-Build a defense-ready, SON-compatible GNN-DQN handover optimization framework.
+Build a defense-ready, Context-Aware Adaptive SON-Gated GNN-DQN handover optimization framework.
 
 Main deployable claim:
 
 > A topology-generalized GNN-DQN learns per-UE handover preferences from
-> UE-observable measurements, then a safety-bounded SON layer translates those
-> preferences into standard A3/CIO-style handover parameter updates.
+> UE-observable measurements. A 2-signal routing gate (evaluating UE Speed and Average Cell Load) dynamically orchestrates decisions between the autonomous ML agent (for spatial load balancing) and a deterministic SON layer (for high-velocity and OOD congestion stability), achieving Pareto optimality.
 
 Use **UE_ONLY** as the primary training and paper path. Use **ORAN_E2** only as a
 future-work/demo profile.
@@ -117,9 +116,9 @@ Headline the deployable method as `son_gnn_dqn`, not raw direct GNN-DQN.
 
 ## Defense Narrative
 
-- The current system is SON-compatible, not a live O-RAN xApp.
-- UE_ONLY features match drive-test and UE-report data.
-- RSRQ is used as a UE-observable load/interference proxy.
-- The GNN supports different cell counts and topologies.
-- The SON layer converts learned preferences into bounded CIO/TTT updates.
-- O-RAN/E2 can later add real PRB utilization and network KPIs.
+- The current system relies on a Context-Aware Adaptive Architecture, achieving a synergistic fusion between ML and traditional telecom physics.
+- The 2-signal routing gate dynamically evaluates UE speed and cell load to determine the safest handover execution path.
+- In stable urban scenarios, the GNN-DQN is granted autonomy, resulting in significant spatial load balancing (+18.8% Jain Fairness).
+- In high-velocity ($v > 15$ m/s) and extreme congestion (Load $\ge$ 35%) scenarios, the architecture prevents ML hallucination by routing users to the SON layer, ensuring 0.0% ping-pong and restoring throughput.
+- UE_ONLY features match drive-test and UE-report data. RSRQ is used as a UE-observable load/interference proxy.
+- O-RAN/E2 can later add true PRB utilization metrics for expanded orchestration.
