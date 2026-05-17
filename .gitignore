@@ -22,7 +22,6 @@ graphify-out/
 # Documentation & Private Thesis Writing
 # ---------------------------------------------------
 final_report/
-*.docx
 *.bib
 *.out
 *.log
