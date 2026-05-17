@@ -1,16 +1,55 @@
+# ---------------------------------------------------
+# Core Codebase (KEEP)
+# ---------------------------------------------------
+# configs/
+# scripts/
+# src/
+# tests/
+# pyproject.toml
+# requirements.txt
+# README.md
+
+# ---------------------------------------------------
+# Large Data & Simulation Results (IGNORE)
+# ---------------------------------------------------
+data/
+results/
+graphify-out/
+*.npy
+*.csv
+
+# ---------------------------------------------------
+# Documentation & Private Thesis Writing (IGNORE)
+# ---------------------------------------------------
+docs/
+final_report/
+*.pdf
+*.docx
+*.tex
+*.bib
+*.out
+*.log
+*.aux
+
+# ---------------------------------------------------
+# Python & Environment Caches (IGNORE)
+# ---------------------------------------------------
 __pycache__/
 *.pyc
-.pytest_cache/
-.DS_Store
-.vscode/
-.idea/
-.claude/
+.venv/
 venv/
-/env/
-.env
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# ---------------------------------------------------
+# Specific Project Temporary Files
+# ---------------------------------------------------
 *.pt
-*.pth
-*.log
-results/runs/
-results/archive_prefix/
-data/processed/
+*.nohup.log
+train.pid
+
+# ---------------------------------------------------
+# Archived / Legacy Files (IGNORE)
+# ---------------------------------------------------
+archive/

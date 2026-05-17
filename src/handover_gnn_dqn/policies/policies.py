@@ -191,3 +191,33 @@ class GnnDqnPolicy:
             epsilon=self.epsilon,
             valid_mask=env.valid_actions(ue_idx),
         )
+
+
+class AdaptiveSONPolicy:
+    """Speed-adaptive hybrid: raw GNN-DQN for low-speed, SON-wrapped for high-speed.
+
+    Low-speed UEs benefit from aggressive load-balancing decisions (raw policy).
+    High-speed UEs need conservative A3+CIO to avoid premature handovers.
+    """
+
+    name = "adaptive_son_gnn_dqn"
+
+    def __init__(self, agent, son_config: SONConfig | None = None, speed_threshold_mps: float = 15.0, load_threshold: float = 0.35):
+        self.agent = agent
+        self.son_policy = SONTunedA3Policy(agent, son_config)
+        self.raw_policy = GnnDqnPolicy(agent, epsilon=0.0)
+        self.speed_threshold_mps = speed_threshold_mps
+        self.load_threshold = load_threshold
+
+    def reset(self, env: CellularNetworkEnv) -> None:
+        self.son_policy.reset(env)
+        self.raw_policy.reset(env)
+
+    def select(self, env: CellularNetworkEnv, ue_idx: int) -> int:
+        avg_load = np.mean(env.cell_loads())
+        if env.ue_speed[ue_idx] > self.speed_threshold_mps or avg_load >= self.load_threshold:
+            return self.son_policy.select(env, ue_idx)
+        return self.raw_policy.select(env, ue_idx)
+
+    def son_metrics(self) -> dict[str, float]:
+        return self.son_policy.son_metrics()

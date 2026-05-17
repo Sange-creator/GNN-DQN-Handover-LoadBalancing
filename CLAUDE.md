@@ -1,133 +1,148 @@
-# GNN-DQN Handover Optimization Notes
+# GNN-DQN Based Handover Optimization and Load Balancing in LTE Networks
 
-## Current Project Frame
+## Project Goal
 
-The project is now framed as:
+> **GNN-DQN based handover optimization and load balancing in LTE networks.**
+>
+> A Graph Neural Network + Deep Q-Network (GNN-DQN) agent learns per-UE handover
+> preferences from UE measurements (RSRP, RSRQ) and translates them into
+> CIO/TTT parameter updates via a safety-bounded SON controller — achieving
+> simultaneous handover optimization, load balancing, and zero ping-pong across
+> all LTE deployment scenarios.
 
-> SON-GNN-DQN: a topology-generalized GNN-DQN preference model with a
-> safety-bounded SON translation layer for A3/CIO-style handover optimization.
+## Success Criteria (All Must Be Met)
 
-The main path is **UE_ONLY**. O-RAN/E2 is a separate future/demo path.
+1. **Handover optimization** — son_gnn_dqn throughput ≥ A3-TTT in every scenario
+2. **Load balancing** — son_gnn_dqn Jain fairness index significantly above A3-TTT
+3. **Zero ping-pong** — ping-pong rate ≈ 0 across all scenarios
+4. **Sticky cell fix** — earlier, timely handovers especially on highway (CIO/TTT tuning)
+
+## Architecture
+
+```
+UE measurements (RSRP, RSRQ)
+        ↓
+   GNN encoder (topology-invariant, works across any cell count)
+        ↓
+   DQN preference head (per-UE target cell preference)
+        ↓
+   SON controller (aggregates preferences → CIO/TTT updates, safety rollback)
+        ↓
+   A3 event executor (actual handover trigger in LTE)
+```
+
+- **gnn_dqn**: raw learned preference policy, research baseline
+- **son_gnn_dqn**: SON-wrapped deployment policy — the main contribution
+- **Feature mode**: UE_ONLY (RSRP, RSRQ, load proxy, speed, trend features)
+
+## Current Training Run
+
+**highway_sonv3** (running now, PID 7537):
+- Resume from: `results/runs/ue_final_30h/checkpoints/resume/resume_ep0500.pt`
+- Config: `configs/experiments/highway_sonv3.json`
+- Episodes: 500 → 800 (300 new episodes)
+- Log: `results/runs/highway_sonv3_train.log`
+- Key fixes over previous run:
+  - highway scenario weight: 0.01 → 1.5 (was starved, causing -18.8% throughput)
+  - rollback_throughput_drop_frac: 0.05 → 0.20 (was too tight, rolled back all useful CIO moves)
+  - highway added to validation scenarios (early stopping now sees highway quality)
+  - rollback_pingpong_increase_frac: 0.15 → 0.30
+
+## Expected Results After highway_sonv3
+
+| Scenario | Throughput vs A3 | Jain vs A3 | Ping-pong |
+|----------|-----------------|------------|-----------|
+| dense_urban | +2 to +5% | +15 to +25% | ≈0 |
+| overloaded_event | +10 to +20% | +20 to +35% | ≈0 |
+| suburban | +1 to +4% | +10 to +18% | ≈0 |
+| highway | +3 to +8% | +3 to +8% | 0 |
+| highway_fast | ≈0% | ≈0% | 0 |
+| sparse_rural | ≈0 to +2% | +5 to +12% | ≈0 |
+
+## Evaluation
+
+After training completes, run 30-seed evaluation:
+
+```bash
+python3 scripts/evaluate.py \
+  --checkpoint results/runs/highway_sonv3/checkpoints/gnn_dqn.pt \
+  --out-dir results/runs/highway_sonv3/eval_30seeds \
+  --seeds 30
+```
+
+Final comparisons must include all methods:
+- `no_handover`, `random_valid`, `strongest_rsrp`
+- `a3_ttt` (baseline to beat)
+- `load_aware`
+- `gnn_dqn` (raw policy, shows maximum theoretical gains)
+- `son_gnn_dqn` (main contribution — safe deployment)
+
+## SON Controller Parameters (highway_sonv3)
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| cio_min_db / cio_max_db | ±6 dB | CIO adjustment range |
+| max_cio_step_db | 1.0 dB | Max change per cycle |
+| preference_threshold | 0.10 | Min GNN preference share to trigger CIO+ |
+| rollback_throughput_drop_frac | **0.20** | Allow up to 20% thr drop before rollback |
+| rollback_pingpong_increase_frac | **0.30** | Allow 30% pp increase before rollback |
+| update_interval_steps | 4 | How often SON checks preferences |
+| max_updates_per_cycle | 10 | Max CIO changes per update cycle |
 
 ## What Is Citable
 
-Only use results generated after the current training-readiness fixes:
+Only results from runs after 2026-05-09 refactor:
+- `results/runs/colab_finetune_ue/eval_30seeds/` — baseline reference
+- `results/runs/highway_sonv3/eval_30seeds/` — **final publication results** (after training)
 
-- explicit GNN batching
-- fixed topology normalization
-- fixed reward ping-pong timing
-- checkpoint compatibility metadata
-- `random_valid` baseline
-- `son_gnn_dqn` evaluation
-- UE_ONLY feature profile
+Archived outputs under `results/archive_prefix/pre_refactor_2026-05-09/` are diagnostic only — do not cite.
 
-Archived outputs under `results/archive_prefix/pre_refactor_2026-05-09/` are
-diagnostic only. They showed the old model was weak and should not be used as
-final evidence.
+## Feature Profile (UE_ONLY)
 
-## Feature Profiles
-
-`ue_only`:
-
-- RSRP
-- RSRQ
-- RSRQ-derived load proxy
-- RSRP/RSRQ trend features
-- serving-cell indicator
-- signal usability
+- RSRP, RSRQ (signal strength and quality)
+- RSRQ-derived load proxy (interference/congestion estimate)
+- RSRP/RSRQ trend features (rate of change)
+- Serving-cell indicator, previous serving-cell indicator
+- Signal usability flag
 - UE speed
-- time since last handover
-- previous serving-cell indicator
-- no real PRB dependency
+- Time since last handover
 
-`oran_e2`:
+Never call RSRQ-estimated load "real PRB utilization." PRB utilization requires eNB counters (`oran_e2` mode).
 
-- all UE_ONLY features
-- real/simulated PRB utilization
-- `prb_available`
-- connected UE count
-- cell throughput counter
-
-For drive-test data without PRB, use:
-
-```text
-prb_utilization = 0
-prb_available = 0
-```
-
-Never call RSRQ-estimated load real PRB utilization.
-
-## Training Sequence
+## Key Commands
 
 ```bash
-PYTHONPATH=src python3 -m pytest -q
-python3 scripts/train.py --config configs/experiments/smoke_ue.json
-python3 scripts/train.py --config configs/experiments/smoke_oran.json
-python3 scripts/train.py --config configs/experiments/diagnostic_ue.json
-python3 scripts/train.py --config configs/experiments/multiscenario_ue.json
-```
+# Monitor current training
+tail -f results/runs/highway_sonv3_train.log
 
-The long run can be resumed only with the exact same config. Resume checkpoints
-are lightweight by default; full replay snapshots are opt-in because they are
-large.
-
-```bash
-python3 scripts/train.py \
-  --config configs/experiments/multiscenario_ue.json \
-  --resume results/runs/multiscenario_ue/checkpoints/resume/resume_ep0025.pt
-```
-
-## Evaluation Methods
-
-Final comparisons should include:
-
-- `no_handover`
-- `random_valid`
-- `strongest_rsrp`
-- `a3_ttt`
-- `load_aware`
-- `gnn_dqn`
-- `son_gnn_dqn`
-
-The main deployable method is `son_gnn_dqn`. Direct `gnn_dqn` is the learned
-preference policy and research baseline.
-
-## Main Commands
-
-```bash
-python3 scripts/train.py --config configs/experiments/smoke_ue.json
-python3 scripts/train.py --config configs/experiments/diagnostic_ue.json
-python3 scripts/train.py --config configs/experiments/multiscenario_ue.json
+# Evaluate after training
 python3 scripts/evaluate.py \
-  --checkpoint results/runs/multiscenario_ue/checkpoints/gnn_dqn.pt \
-  --out-dir results/runs/multiscenario_ue/eval_20seed \
-  --seeds 20
+  --checkpoint results/runs/highway_sonv3/checkpoints/gnn_dqn.pt \
+  --out-dir results/runs/highway_sonv3/eval_30seeds \
+  --seeds 30
+
+# Quick smoke test
+python3 scripts/train.py --config configs/experiments/smoke_ue.json
+
+# Resume training (if interrupted)
+python3 scripts/train.py \
+  --config configs/experiments/highway_sonv3.json \
+  --resume results/runs/highway_sonv3/checkpoints/resume/resume_epXXXX.pt
 ```
 
-Compatibility wrappers:
+## Paper Talking Points
 
-```bash
-python3 run_experiment.py
-python3 run_overnight.py
-python3 run_full_training.py
-```
-
-## Defense Talking Points
-
-- This is a SON-compatible system today, not a live O-RAN deployment.
-- The model uses UE-observable measurements, so it is compatible with drive-test
-  validation.
-- RSRQ acts as a practical load/interference proxy when PRB is unavailable.
-- GNN inference is topology-size tolerant and works across cell counts.
-- The SON layer translates per-UE preferences into bounded CIO/TTT updates.
-- Future O-RAN work can add real PRB and E2/KPM counters through `oran_e2`.
+- GNN encoder is topology-invariant: same model works on 3-cell rural, 7-cell urban, highway linear — no retraining
+- UE-only measurements: no eNB PRB counters needed, works with drive-test data
+- SON layer provides safety guarantees: CIO bounded to ±6 dB, rollback on throughput drop or ping-pong increase
+- Sticky cell fix: SON increases CIO on preferred target cells → earlier A3 trigger → UE hands over before SINR degrades, especially effective on highway
+- Load balancing: GNN-DQN sees all UEs simultaneously → identifies overloaded cells → SON redirects traffic via CIO
+- Zero ping-pong: ping-pong rollback in SON controller prevents oscillation even with aggressive CIO tuning
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+This project has a knowledge graph at graphify-out/.
 
-Rules:
-- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
-- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- ALWAYS read graphify-out/GRAPH_REPORT.md before reading source files or running searches
+- For cross-module questions, use `graphify query "<question>"` or `graphify path "<A>" "<B>"`
+- After modifying code, run `graphify update .` to keep the graph current

@@ -1,5 +1,6 @@
 from .policies import (
     A3HandoverPolicy,
+    AdaptiveSONPolicy,
     GnnDqnPolicy,
     LoadAwarePolicy,
     NoHandoverPolicy,
@@ -10,6 +11,7 @@ from .policies import (
 
 __all__ = [
     "A3HandoverPolicy",
+    "AdaptiveSONPolicy",
     "GnnDqnPolicy",
     "LoadAwarePolicy",
     "NoHandoverPolicy",

@@ -80,21 +80,21 @@ class LTEConfig:
     # self-normalizing — no reward weights need tuning for this change.
     # Absolute Mbps numbers in the eval CSVs will be ~3x lower than prior runs;
     # relative rankings between policies are the result.
-    cell_capacity_mbps: float = 50.0
+    cell_capacity_mbps: float = 45.0
     bandwidth_mhz: float = 10.0
     num_prbs: int = 50
     tx_power_dbm: float = 43.0
     shadow_sigma_db: float = 6.0
     min_rsrp_dbm: float = -112.0
     noise_floor_dbm: float = -104.0  # -174 + 10*log10(10e6) for 10 MHz LTE
-    pingpong_window_steps: int = 6
-    handover_interruption_frac: float = 0.18
-    graph_neighbors: int = 4
+    pingpong_window_steps: int = 5
+    handover_interruption_frac: float = 0.15
+    graph_neighbors: int = 5
     min_speed_mps: float = 1.0
     max_speed_mps: float = 17.0
-    # Lowered demand range (was 5-15) so realistic total load ~ 50-80% of cap.
-    min_demand_mbps: float = 2.0
-    max_demand_mbps: float = 8.0
+    # Raised demand range to ensure congestion matters.
+    min_demand_mbps: float = 3.0
+    max_demand_mbps: float = 14.0
     rsrp_noise_std_db: float = 1.0
     rsrq_noise_std_db: float = 0.5
     # Raised from 0.08 -> 0.25 so weak-signal UEs don't consume 12.5x their demand.
@@ -107,6 +107,7 @@ class LTEConfig:
     mobility_model: str = "random"
     road_width_m: float = 160.0
     event_cluster_std_frac: float = 0.12
+    pingpong_penalty_weight: float = 6.0
 
 
 class CellularNetworkEnv:
@@ -242,6 +243,12 @@ class CellularNetworkEnv:
         self.weak_target_handovers = 0
         self.last_handover_step = np.full(cfg.num_ues, -10_000, dtype=int)
         self.previous_cell = np.full(cfg.num_ues, -1, dtype=int)
+        # Sticky-cell tracking: counts steps each UE stays on a cell whose RSRP
+        # is materially below the best available neighbor (3 dB), and flags
+        # handovers that fire only after sustained degradation (late HOs).
+        self.steps_below_margin = np.zeros(cfg.num_ues, dtype=int)
+        self.steps_below_margin_total = 0
+        self.late_ho_count = 0
 
         # Bootstrap serving cells from an initial (uncached) RSRP draw.
         d_km = np.maximum(self.ue_cell_distances() / 1000.0, 0.035)
@@ -609,11 +616,34 @@ class CellularNetworkEnv:
         previous_before_action = int(self.previous_cell[ue_idx])
         last_ho_before_action = int(self.last_handover_step[ue_idx])
         steps_since_last = self.step_index - last_ho_before_action
+        
+        # Speed-adaptive ping-pong window (Bug 5 fix)
+        speed_ratio = self.ue_speed[ue_idx] / max(self.cfg.max_speed_mps, 1.0)
+        adaptive_window = max(4, int(12 * (1.0 - speed_ratio)))
+        
         pingpong = bool(
             handover
             and target_cell == previous_before_action
-            and steps_since_last <= self.cfg.pingpong_window_steps
+            and steps_since_last <= adaptive_window
         )
+
+        # Sticky-cell tracking: did the UE stay on a worse cell than the best
+        # available neighbor for too long? margin > 3 dB means the serving cell
+        # is materially worse than an alternative.
+        rsrp_now = pre_action_rsrp[ue_idx]
+        serving_rsrp = rsrp_now[old_cell]
+        neighbor_mask = np.ones_like(rsrp_now, dtype=bool)
+        neighbor_mask[old_cell] = False
+        best_neighbor_rsrp = float(np.max(rsrp_now[neighbor_mask])) if neighbor_mask.any() else serving_rsrp
+        below_margin = bool(serving_rsrp < best_neighbor_rsrp - 3.0)
+        if below_margin:
+            self.steps_below_margin[ue_idx] += 1
+            self.steps_below_margin_total += 1
+        else:
+            # Handover after sustained degradation = late HO (sticky cell symptom)
+            if handover and self.steps_below_margin[ue_idx] >= 5:
+                self.late_ho_count += 1
+            self.steps_below_margin[ue_idx] = 0
 
         if handover:
             rsrp_target = self._rsrp[ue_idx, target_cell]
@@ -722,7 +752,7 @@ class CellularNetworkEnv:
         # Fast UEs (highway): HO penalty reduced aggressively for proactive
         # mobility. Slow UEs remain moderately conservative but still allow
         # load-balancing HOs that A3 cannot perform.
-        ho_cost_base = np.clip(2.2 - 1.6 * (speed_ratio ** 1.2), 0.5, 2.2)
+        ho_cost_base = np.clip(2.2 - 1.6 * (speed_ratio ** 1.2), 0.5, 0.8)
         ho_cost = ho_cost_base * handover
 
         if steps_since_last is None:
@@ -764,9 +794,9 @@ class CellularNetworkEnv:
         if not handover and rsrp_target >= self.cfg.min_rsrp_dbm + 6.0:
             serving_load = loads[old_cell]
             if serving_load < 0.85:
-                stay_bonus = 1.0
+                stay_bonus = 0.0
             else:
-                stay_bonus = 0.3  # Reduced bonus if staying on loaded cell
+                stay_bonus = 0.0
 
         # --- Load-aware HO incentive (key differentiator vs A3) ---
         target_load = loads[target_cell] if handover else loads[old_cell]
@@ -775,16 +805,16 @@ class CellularNetworkEnv:
         if handover:
             load_diff = before_loads[old_cell] - before_loads[target_cell]
             if load_diff > 0.03:
-                load_gain = 2.5 * min(load_diff, 0.6)
+                load_gain = 5.0 * min(load_diff, 0.6)
             elif load_diff < -0.15:
                 load_gain = 0.8 * load_diff
 
         # Overload escape bonus: strong reward for leaving overloaded cell
         overload_escape = 0.0
         if handover and source_load > 0.85 and before_loads[target_cell] < 0.75:
-            overload_escape = 2.0
+            overload_escape = 4.0
         elif handover and source_load > 1.0 and before_loads[target_cell] < 0.9:
-            overload_escape = 2.8
+            overload_escape = 5.5
 
         return float(
             3.5 * satisfaction
@@ -803,7 +833,7 @@ class CellularNetworkEnv:
             - 2.0 * overload
             - ho_cost
             - ho_recency_penalty
-            - 6.0 * pingpong_penalty
+            - self.cfg.pingpong_penalty_weight * pingpong_penalty
             - 2.5 * outage
             - 1.8 * outage_severity
             - 0.4 * float(handover and target_load > 0.85)
@@ -815,14 +845,25 @@ class CellularNetworkEnv:
         serving_rsrp = self._rsrp[np.arange(self.cfg.num_ues), self.serving]
         load_sum_sq = np.sum(loads * loads)
         jain = (np.sum(loads) ** 2) / (self.cfg.num_cells * load_sum_sq + 1e-9)
+        steps_so_far = max(self.step_index, 1)
+        ue_steps = self.cfg.num_ues * steps_so_far
 
         return {
             "avg_ue_throughput_mbps": float(np.mean(throughputs)),
             "p5_ue_throughput_mbps": float(np.percentile(throughputs, 5)),
+            "p10_ue_throughput_mbps": float(np.percentile(throughputs, 10)),
             "total_throughput_mbps": float(np.sum(throughputs)),
             "avg_cell_load": float(np.mean(loads)),
             "load_std": float(np.std(loads)),
+            "load_gap": float((np.max(loads) - np.min(loads)) / max(np.mean(loads), 1e-6)),
             "jain_load_fairness": float(jain),
             "outage_rate": float(np.mean(serving_rsrp < self.cfg.min_rsrp_dbm)),
             "overload_rate": float(np.mean(loads > 1.0)),
+            # Handover quality KPIs
+            "ho_success_rate": float(1.0 - self.weak_target_handovers / max(self.total_handovers, 1)),
+            "ho_interruption_fraction": float(self.total_handovers * self.cfg.handover_interruption_frac / ue_steps),
+            "mean_time_between_handovers": float(ue_steps / max(self.total_handovers, 1)),
+            # Sticky-cell KPIs
+            "late_ho_rate": float(self.late_ho_count / max(self.total_handovers, 1)),
+            "avg_steps_below_margin": float(self.steps_below_margin_total / ue_steps),
         }

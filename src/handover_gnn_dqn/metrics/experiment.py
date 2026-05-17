@@ -9,6 +9,7 @@ import numpy as np
 from ..models.flat_dqn import FlatDQNAgent
 from ..policies.policies import (
     A3HandoverPolicy,
+    AdaptiveSONPolicy,
     GnnDqnPolicy,
     LoadAwarePolicy,
     NoHandoverPolicy,
@@ -134,6 +135,7 @@ def default_policy_factories(
     if gnn_agent is not None:
         policies["gnn_dqn"] = lambda: GnnDqnPolicy(gnn_agent, epsilon=0.0)
         policies["son_gnn_dqn"] = lambda: SONTunedA3Policy(gnn_agent, son_config)
+        policies["adaptive_son_gnn_dqn"] = lambda: AdaptiveSONPolicy(gnn_agent, son_config)
         if include_true_prb:
             # Network-cooperative SON ablation: same model + SON layer, but the
             # load signal comes from true PRB (PM counters / E2 KPM) instead of

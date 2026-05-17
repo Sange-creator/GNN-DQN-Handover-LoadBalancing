@@ -181,6 +181,7 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
         max_speed_mps=17.0,
         description="Real Pokhara: OpenCellID positions, realistic load",
         mobility_model="random",
+        shadow_sigma_db=8.33,
     ))
 
     # 7. POKHARA DENSE PEAK HOUR (Track-B stress test on real positions)
@@ -200,7 +201,7 @@ def get_training_scenarios(seed: int = 42) -> List[Scenario]:
         max_speed_mps=14.0,
         description="Pokhara peak hour: real OpenCellID positions, 15 UEs/cell, video-heavy demand",
         mobility_model="random",
-        shadow_sigma_db=7.0,
+        shadow_sigma_db=8.33,
         min_demand_mbps=3.0,
         max_demand_mbps=10.0,
     ))
@@ -241,6 +242,7 @@ def get_test_scenarios(seed: int = 99) -> List[Scenario]:
         max_speed_mps=15.0,
         description="Kathmandu: real positions, very dense, heavy load",
         mobility_model="random",
+        shadow_sigma_db=8.33,
     ))
 
     # 8. DHARAN (synthetic, different terrain)
@@ -255,6 +257,7 @@ def get_test_scenarios(seed: int = 99) -> List[Scenario]:
         max_speed_mps=17.0,
         description="Dharan: synthetic realistic, medium density",
         mobility_model="random",
+        shadow_sigma_db=8.33,
     ))
 
     # 9. UNKNOWN HEXAGONAL (completely unseen structure)
@@ -361,7 +364,7 @@ def get_stress_scenarios(seed: int = 137) -> List[Scenario]:
         max_speed_mps=14.0,
         description="Stress: real Pokhara positions, 30 UEs/cell, 1.6× capacity demand",
         mobility_model="random",
-        shadow_sigma_db=7.0,
+        shadow_sigma_db=8.33,
         min_demand_mbps=3.0,
         max_demand_mbps=13.0,
     ))

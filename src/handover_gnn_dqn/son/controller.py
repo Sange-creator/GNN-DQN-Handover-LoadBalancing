@@ -26,11 +26,11 @@ class SONConfig:
     base_ttt_steps: int = 3
     max_ttt_steps: int = 8
     min_ttt_steps: int = 2
-    preference_threshold: float = 0.12
+    preference_threshold: float = 0.08
     load_proxy_overload_threshold: float = 0.80
-    max_updates_per_cycle: int = 12
-    rollback_throughput_drop_frac: float = 0.12
-    rollback_pingpong_increase_frac: float = 0.25
+    max_updates_per_cycle: int = 15
+    rollback_throughput_drop_frac: float = 0.25
+    rollback_pingpong_increase_frac: float = 0.35
     rollback_pingpong_floor: float = 0.05
     ttt_decrease_threshold: float = 0.10
     ttt_cooldown_steps: int = 20
@@ -71,11 +71,25 @@ class SONController:
         self.last_metrics: dict[str, float] | None = None
         self._previous_cio: np.ndarray | None = None
         self.updates: List[SONUpdate] = []
+        # Per-cycle pingpong tracking — cumulative ratio is too insensitive
+        # late in episode, so we measure pingpongs that happened since the
+        # last SON cycle.
+        self._prev_total_ho = 0
+        self._prev_pingpong_ho = 0
 
     def reset(self, env: CellularNetworkEnv) -> None:
         n = env.cfg.num_cells
         self.cio_db = np.zeros((n, n), dtype=float)
-        self.ttt_steps = np.full((n, n), self.config.base_ttt_steps, dtype=int)
+        # Speed-aware TTT: highway UEs (>15 m/s) get min TTT so A3 fires
+        # before SINR degrades at cell boundaries (sticky cell fix).
+        # Urban/suburban UEs stay at base_ttt — no effect on those scenarios.
+        _HIGHWAY_SPEED_MPS = 15.0
+        avg_speed = float(np.mean(env.ue_speed)) if hasattr(env, "ue_speed") else 0.0
+        adaptive_ttt = (
+            self.config.min_ttt_steps if avg_speed > _HIGHWAY_SPEED_MPS
+            else self.config.base_ttt_steps
+        )
+        self.ttt_steps = np.full((n, n), adaptive_ttt, dtype=int)
         self.last_update_step = -10_000
         self._last_ttt_change_step = -10_000
         self.update_count = 0
@@ -83,6 +97,8 @@ class SONController:
         self.last_metrics = None
         self._previous_cio = self.cio_db.copy()
         self.updates = []
+        self._prev_total_ho = 0
+        self._prev_pingpong_ho = 0
 
     def maybe_update(self, env: CellularNetworkEnv) -> None:
         if self.cio_db is None:
@@ -122,6 +138,7 @@ class SONController:
             if served_counts[source] <= 0:
                 continue
             row = preferences[source]
+            source_load = target_load(source)
             for target in range(env.cfg.num_cells):
                 if target == source:
                     continue
@@ -131,11 +148,17 @@ class SONController:
                     delta = -self.config.max_cio_step_db
                     reason = overload_reason
                     priority = t_load
-                elif preference_share >= self.config.preference_threshold:
-                    delta = self.config.max_cio_step_db
-                    reason = "gnn_preference"
-                    priority = preference_share
+                elif preference_share >= 0.35 and source_load > 0.70 and t_load < 0.65:
+                    # MLB override: high GNN confidence + congested source + light target
+                    # Jump CIO to max in one step (standard 3GPP MLB behavior)
+                    delta = self.config.cio_max_db - self.cio_db[source, target]
+                    reason = "mlb_congestion_override"
+                    priority = preference_share + source_load
                 else:
+                    # Path 3 (gnn_preference for non-overloaded cells) disabled.
+                    # It injected pp noise in normal-load scenarios where A3-TTT
+                    # was already near-optimal. SON now only acts on real overload
+                    # (path 1) or MLB congestion (path 2).
                     continue
 
                 new_cio = float(
@@ -240,18 +263,23 @@ class SONController:
         metrics = env.metrics()
         previous_thr = self.last_metrics.get("avg_ue_throughput_mbps", 0.0)
         current_thr = metrics["avg_ue_throughput_mbps"]
-        previous_pingpong = self.last_metrics.get("pingpong_rate", 0.0)
-        current_pingpong = env.pingpong_handovers / max(env.total_handovers, 1)
-        throughput_bad = (
-            previous_thr > 1e-9
-            and current_thr < previous_thr * (1.0 - self.config.rollback_throughput_drop_frac)
-        )
-        pingpong_bad = (
-            current_pingpong > self.config.rollback_pingpong_floor
-            and current_pingpong > previous_pingpong * (
-                1.0 + self.config.rollback_pingpong_increase_frac
-            ) + 1e-9
-        )
-        if throughput_bad or pingpong_bad:
+
+        # Per-cycle pingpong rate: handovers since last SON cycle, not
+        # cumulative-since-episode-start. Cumulative ratios become statistically
+        # insensitive late in episodes — a bad CIO change at step 80 barely moves
+        # the cumulative ratio so rollback never fires when we need it most.
+        cycle_total_ho = env.total_handovers - self._prev_total_ho
+        cycle_pp_ho = env.pingpong_handovers - self._prev_pingpong_ho
+        cycle_pp_rate = cycle_pp_ho / max(cycle_total_ho, 1)
+        self._prev_total_ho = env.total_handovers
+        self._prev_pingpong_ho = env.pingpong_handovers
+
+        # Rollback only on severe pingpong: require at least 3 HOs in cycle
+        # and >5% rate. The low config floor (0.01) was too aggressive —
+        # it treated legitimate load-balancing HOs as ping-pong and
+        # prevented CIO from ever reaching MLB bypass threshold.
+        pingpong_bad = cycle_total_ho >= 3 and cycle_pp_rate > 0.05
+
+        if pingpong_bad:
             self.cio_db[:] = self._previous_cio
             self.rollback_count += 1
