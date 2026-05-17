@@ -110,6 +110,7 @@ def make_env_from_scenario(
     feature_mode: str = "ue_only",
     prb_available: bool = True,
     num_ues: int | None = None,
+    pingpong_penalty_weight: float = 6.0,
 ) -> CellularNetworkEnv:
     cfg = LTEConfig(
         num_cells=scenario.num_cells,
@@ -124,6 +125,7 @@ def make_env_from_scenario(
         mobility_model=scenario.mobility_model,
         feature_mode=feature_mode,
         prb_available=prb_available,
+        pingpong_penalty_weight=pingpong_penalty_weight,
     )
     return CellularNetworkEnv(cfg)
 
@@ -367,6 +369,7 @@ def _run_behavioral_cloning(
             feature_mode=feature_mode,
             prb_available=prb_available,
             num_ues=capped_num_ues(scenario, scenario_ue_caps),
+            pingpong_penalty_weight=pingpong_penalty_weight,
         )
         env.reset(seed + 17_000 + 101 * episode)
         teacher = _teacher_for_scenario(scenario.name)
@@ -467,6 +470,7 @@ def train_multi_scenario(
     log_every_episodes: int | None = None,
     steps_per_episode_curriculum: dict | None = None,
     scenario_ue_caps: dict[str, int] | None = None,
+    pingpong_penalty_weight: float = 6.0,
 ) -> tuple[GnnDQNAgent, list[dict], int]:
     rng = np.random.default_rng(seed)
     history: list[dict] = []
@@ -617,7 +621,7 @@ def train_multi_scenario(
         episode_reward = 0.0
         invalid_actions = 0
         nan_state_count = 0
-        frac = min(episode / max(dqn_cfg.epsilon_decay_episodes, 1), 1.0)
+        frac = min(offset / max(dqn_cfg.epsilon_decay_episodes, 1), 1.0)
         epsilon = dqn_cfg.epsilon_start + frac * (dqn_cfg.epsilon_end - dqn_cfg.epsilon_start)
         steps_this_episode = steps_for_episode(
             steps_per_episode,
@@ -626,7 +630,7 @@ def train_multi_scenario(
         )
 
         # PER beta annealing: starts low, reaches 1.0 by end of training
-        beta_frac = min(episode / max(total_episodes - 1, 1), 1.0)
+        beta_frac = min(offset / max(total_episodes - start_episode - 1, 1), 1.0)
         per_beta = dqn_cfg.per_beta_start + beta_frac * (dqn_cfg.per_beta_end - dqn_cfg.per_beta_start)
 
         # N-step buffers per UE for this episode
@@ -1048,7 +1052,8 @@ def save_checkpoint(
 
 
 def load_checkpoint_payload(path: Path) -> dict:
-    payload = torch.load(path, map_location="cpu", weights_only=False)
+    from ..models.gnn_dqn import DEVICE
+    payload = torch.load(path, map_location=DEVICE, weights_only=False)
     if not isinstance(payload, dict) or "state_dict" not in payload or "metadata" not in payload:
         raise ValueError(f"{path} is not a compatible GNN-DQN checkpoint")
     return payload

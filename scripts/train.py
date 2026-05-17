@@ -209,6 +209,7 @@ def main() -> None:
         ),
         steps_per_episode_curriculum=steps_per_episode_curriculum,
         scenario_ue_caps=training_ue_caps,
+        pingpong_penalty_weight=float(cfg.get("pingpong_penalty_weight", 6.0)),
     )
 
     # Prefer the honest held-out validation score for best-row selection.

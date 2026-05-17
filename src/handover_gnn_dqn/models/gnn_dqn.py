@@ -16,8 +16,12 @@ from ..env.simulator import CellularNetworkEnv, LTEConfig
 # Transition: (state, action, reward, next_state, done, next_valid_mask)
 Transition = Tuple[np.ndarray, int, float, np.ndarray, bool, np.ndarray]
 
-# MPS has too much overhead for small per-UE forward passes. CPU is faster here.
-DEVICE = torch.device("cpu")
+# MPS is slower than CPU for this model (GCNConv scatter overhead > compute gain at 94k params).
+# CUDA remains the target accelerator for larger deployments.
+if torch.cuda.is_available():
+    DEVICE = torch.device("cuda")
+else:
+    DEVICE = torch.device("cpu")
 
 
 @dataclass(frozen=True)
